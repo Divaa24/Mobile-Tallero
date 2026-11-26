@@ -8,12 +8,15 @@ import {
   Platform,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../types/navigation";
+import api, { unwrapData, getErrorMessage } from "../services/api";
 
 type LoginScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Login">;
@@ -23,14 +26,38 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert("Data Belum Lengkap", "Masukkan email dan kata sandi terlebih dahulu.");
       return;
     }
-    // Sementara langsung masuk ke halaman utama (nanti disambungkan ke API)
-    navigation.replace("MainApp");
+
+    try {
+      setLoading(true);
+      const res = await api.post("/auth/login", {
+        email: email.trim(),
+        password,
+      });
+
+      const payload = unwrapData(res);
+      const token = payload?.token || res?.data?.token;
+      const user = payload?.user || payload;
+
+      if (token) {
+        await AsyncStorage.setItem("tallero_token", token);
+      }
+      if (user) {
+        await AsyncStorage.setItem("tallero_user", JSON.stringify(user));
+      }
+
+      navigation.replace("MainApp");
+    } catch (error) {
+      Alert.alert("Login Gagal", getErrorMessage(error, "Email atau kata sandi salah."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -44,7 +71,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header Gradasi Khas Tallero */}
         <LinearGradient
           colors={["#012436", "#013C58", "#00537A"]}
           start={{ x: 0, y: 0 }}
@@ -62,7 +88,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           </Text>
         </LinearGradient>
 
-        {/* Kartu Form Login */}
         <View className="px-6 -mt-12 flex-1 justify-between pb-8">
           <View className="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
             <Text className="text-tallero-navy text-xl font-extrabold mb-1">
@@ -72,7 +97,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               Silakan masuk menggunakan akun pelanggan Tallero
             </Text>
 
-            {/* Input Email */}
             <Text className="text-tallero-navy text-xs font-bold mb-2">
               Email
             </Text>
@@ -89,11 +113,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               />
             </View>
 
-            {/* Input Password */}
             <Text className="text-tallero-navy text-xs font-bold mb-2">
               Kata Sandi
             </Text>
-            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-2">
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-5">
               <FontAwesome6 name="lock" size={14} color="#00537A" />
               <TextInput
                 value={password}
@@ -115,25 +138,24 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity className="self-end mb-6">
-              <Text className="text-tallero-teal text-xs font-semibold">
-                Lupa kata sandi?
-              </Text>
-            </TouchableOpacity>
-
-            {/* Tombol Masuk */}
             <TouchableOpacity
               onPress={handleLogin}
+              disabled={loading}
               activeOpacity={0.85}
               className="bg-tallero-navy py-3.5 rounded-xl flex-row items-center justify-center gap-2 shadow-md"
             >
-              <Text className="text-white font-bold text-sm tracking-wide">
-                Masuk Sekarang
-              </Text>
-              <FontAwesome6 name="arrow-right" size={13} color="#F5A201" />
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Text className="text-white font-bold text-sm tracking-wide">
+                    Masuk Sekarang
+                  </Text>
+                  <FontAwesome6 name="arrow-right" size={13} color="#F5A201" />
+                </>
+              )}
             </TouchableOpacity>
 
-            {/* Tombol Masuk Cepat (Demo UI) */}
             <TouchableOpacity
               onPress={() => navigation.replace("MainApp")}
               activeOpacity={0.8}
@@ -145,7 +167,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             </TouchableOpacity>
           </View>
 
-          {/* Footer Daftar Akun */}
           <View className="flex-row justify-center items-center mt-6">
             <Text className="text-slate-500 text-xs">Belum punya akun? </Text>
             <TouchableOpacity onPress={() => navigation.navigate("Register")}>

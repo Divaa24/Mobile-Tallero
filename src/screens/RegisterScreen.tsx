@@ -8,12 +8,16 @@ import {
   Platform,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  Modal,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../types/navigation";
+import api, { unwrapData, getErrorMessage } from "../services/api";
 
 type RegisterScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Register">;
@@ -23,17 +27,83 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
+  // State Modal Verifikasi OTP (POST /auth/verify-otp)
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+
+  const handleRegister = async () => {
     if (!name.trim() || !phone.trim() || !email.trim() || !password.trim()) {
-      Alert.alert("Data Belum Lengkap", "Lengkapi semua kolom pendaftaran.");
+      Alert.alert("Data Belum Lengkap", "Lengkapi nama, nomor HP, email, dan kata sandi.");
       return;
     }
-    Alert.alert("Pendaftaran Berhasil", "Akun Tallero kamu siap digunakan.", [
-      { text: "Lanjut", onPress: () => navigation.replace("MainApp") },
-    ]);
+
+    try {
+      setLoading(true);
+      const res = await api.post("/auth/register", {
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        phone: phone.trim(),
+        ...(address.trim() ? { address: address.trim() } : {}),
+      });
+
+      const payload = unwrapData(res);
+      const token = payload?.token || res?.data?.token;
+
+      if (token) {
+        await AsyncStorage.setItem("tallero_token", token);
+        if (payload?.user) {
+          await AsyncStorage.setItem("tallero_user", JSON.stringify(payload.user));
+        }
+        navigation.replace("MainApp");
+      } else {
+        // Jika backend mengirim OTP ke email
+        setShowOtpModal(true);
+      }
+    } catch (error) {
+      Alert.alert("Pendaftaran Gagal", getErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpCode.trim().length !== 6) {
+      Alert.alert("Kode OTP Tidak Valid", "Masukkan 6 digit kode OTP dari email kamu.");
+      return;
+    }
+
+    try {
+      setVerifyingOtp(true);
+      const res = await api.post("/auth/verify-otp", {
+        email: email.trim(),
+        otpCode: otpCode.trim(),
+      });
+
+      const payload = unwrapData(res);
+      const token = payload?.token || res?.data?.token;
+
+      setShowOtpModal(false);
+
+      if (token) {
+        await AsyncStorage.setItem("tallero_token", token);
+        navigation.replace("MainApp");
+      } else {
+        Alert.alert("Verifikasi Berhasil", "Akun kamu aktif, silakan login.", [
+          { text: "Login", onPress: () => navigation.replace("Login") },
+        ]);
+      }
+    } catch (error) {
+      Alert.alert("Verifikasi Gagal", getErrorMessage(error, "Kode OTP salah atau kedaluwarsa."));
+    } finally {
+      setVerifyingOtp(false);
+    }
   };
 
   return (
@@ -47,7 +117,6 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header Gradasi */}
         <LinearGradient
           colors={["#012436", "#013C58", "#00537A"]}
           start={{ x: 0, y: 0 }}
@@ -69,10 +138,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           </Text>
         </LinearGradient>
 
-        {/* Kartu Form Register */}
         <View className="px-6 -mt-8 flex-1 justify-between pb-8">
           <View className="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
-            {/* Nama Lengkap */}
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Nama Lengkap
             </Text>
@@ -87,7 +154,6 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               />
             </View>
 
-            {/* Nomor WhatsApp / HP */}
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Nomor WhatsApp
             </Text>
@@ -103,7 +169,6 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               />
             </View>
 
-            {/* Email */}
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Email
             </Text>
@@ -120,7 +185,20 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               />
             </View>
 
-            {/* Password */}
+            <Text className="text-tallero-navy text-xs font-bold mb-1.5">
+              Alamat (Opsional)
+            </Text>
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-3.5">
+              <FontAwesome6 name="location-dot" size={14} color="#00537A" />
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Alamat tempat tinggal"
+                placeholderTextColor="#94a3b8"
+                className="flex-1 ml-3 text-slate-800 text-sm"
+              />
+            </View>
+
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Kata Sandi
             </Text>
@@ -146,20 +224,25 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               </TouchableOpacity>
             </View>
 
-            {/* Tombol Daftar */}
             <TouchableOpacity
               onPress={handleRegister}
+              disabled={loading}
               activeOpacity={0.85}
               className="bg-tallero-amber py-3.5 rounded-xl flex-row items-center justify-center gap-2 shadow-sm"
             >
-              <Text className="text-tallero-dark font-extrabold text-sm">
-                Daftar Akun Tallero
-              </Text>
-              <FontAwesome6 name="check" size={14} color="#012436" />
+              {loading ? (
+                <ActivityIndicator color="#012436" size="small" />
+              ) : (
+                <>
+                  <Text className="text-tallero-dark font-extrabold text-sm">
+                    Daftar Akun Tallero
+                  </Text>
+                  <FontAwesome6 name="check" size={14} color="#012436" />
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
-          {/* Footer Kembali ke Login */}
           <View className="flex-row justify-center items-center mt-6">
             <Text className="text-slate-500 text-xs">Sudah punya akun? </Text>
             <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -170,6 +253,48 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Modal Verifikasi OTP 6 Digit */}
+      <Modal
+        visible={showOtpModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowOtpModal(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-center px-6">
+          <View className="bg-white rounded-3xl p-6">
+            <Text className="text-tallero-navy text-lg font-extrabold">
+              Verifikasi Kode OTP
+            </Text>
+            <Text className="text-slate-500 text-xs mt-1 mb-4">
+              Masukkan 6 digit kode OTP yang dikirim ke {email}
+            </Text>
+
+            <TextInput
+              value={otpCode}
+              onChangeText={setOtpCode}
+              placeholder="000000"
+              keyboardType="number-pad"
+              maxLength={6}
+              className="bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-center text-xl font-extrabold tracking-[8px] text-tallero-navy mb-4"
+            />
+
+            <TouchableOpacity
+              onPress={handleVerifyOtp}
+              disabled={verifyingOtp}
+              className="bg-tallero-navy py-3.5 rounded-xl items-center"
+            >
+              {verifyingOtp ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text className="text-white text-sm font-extrabold">
+                  Verifikasi Akun
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

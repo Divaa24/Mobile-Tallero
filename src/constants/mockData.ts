@@ -8,8 +8,10 @@ import {
   BookingStatus,
 } from "../types/models";
 
-export const formatRupiah = (amount: number): string => {
-  return "Rp " + amount.toLocaleString("id-ID");
+export const formatRupiah = (amount?: number | string | null): string => {
+  const numeric = Number(amount ?? 0);
+  if (isNaN(numeric)) return "Rp 0";
+  return "Rp " + Math.round(numeric).toLocaleString("id-ID");
 };
 
 export const STATUS_CONFIG: Record<

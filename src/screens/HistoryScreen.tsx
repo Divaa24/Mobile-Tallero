@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,16 @@ import {
   Modal,
   TextInput,
   Alert,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import { Booking } from "../types/models";
+import api, { unwrapData, getErrorMessage } from "../services/api";
 import {
   MOCK_BOOKINGS,
   STATUS_CONFIG,
@@ -35,16 +40,39 @@ const formatTanggal = (isoString: string) => {
 export default function HistoryScreen() {
   const [bookings, setBookings] = useState<Booking[]>(MOCK_BOOKINGS);
   const [activeTab, setActiveTab] = useState<"ACTIVE" | "DONE">("ACTIVE");
-  const [expandedId, setExpandedId] = useState<number | null>(
-    MOCK_BOOKINGS[0]?.id ?? null
-  );
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // State Modal Ulasan (Model Review)
+  // Modal Review
   const [reviewModalBooking, setReviewModalBooking] = useState<Booking | null>(
     null
   );
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState<string>("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const fetchMyBookings = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("tallero_token");
+      if (!token) return;
+
+      const res = await api.get("/bookings/my");
+      const list = unwrapData<Booking[]>(res);
+      if (Array.isArray(list)) {
+        setBookings(list);
+      }
+    } catch {
+      // Tetap gunakan state saat ini
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyBookings();
+    }, [fetchMyBookings])
+  );
 
   const filteredBookings = bookings.filter((b) =>
     activeTab === "ACTIVE"
@@ -52,38 +80,33 @@ export default function HistoryScreen() {
       : b.status === "COMPLETED" || b.status === "CANCELLED"
   );
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (!reviewModalBooking) return;
 
-    setBookings((prev) =>
-      prev.map((item) =>
-        item.id === reviewModalBooking.id
-          ? {
-              ...item,
-              review: {
-                id: Date.now(),
-                bookingId: item.id,
-                userId: item.userId,
-                rating,
-                comment: comment.trim() || "Pelayanan sangat memuaskan!",
-                createdAt: new Date().toISOString(),
-              },
-            }
-          : item
-      )
-    );
+    try {
+      setSubmittingReview(true);
+      await api.post("/reviews", {
+        bookingId: Number(reviewModalBooking.id),
+        rating: Number(rating),
+        ...(comment.trim() ? { comment: comment.trim() } : {}),
+      });
 
-    setReviewModalBooking(null);
-    setRating(5);
-    setComment("");
-    Alert.alert("Terima Kasih!", "Ulasan servis kamu berhasil dikirim.");
+      setReviewModalBooking(null);
+      setRating(5);
+      setComment("");
+      await fetchMyBookings();
+      Alert.alert("Terima Kasih!", "Ulasan servis kamu berhasil dikirim.");
+    } catch (error) {
+      Alert.alert("Gagal Mengirim Ulasan", getErrorMessage(error));
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   return (
     <View className="flex-1 bg-slate-50">
       <StatusBar style="light" />
 
-      {/* Header Gradasi Tallero */}
       <LinearGradient
         colors={["#012436", "#013C58", "#00537A"]}
         start={{ x: 0, y: 0 }}
@@ -103,7 +126,6 @@ export default function HistoryScreen() {
           Riwayat & Status Booking
         </Text>
 
-        {/* Segmented Filter Tab */}
         <View className="flex-row bg-white/10 p-1 rounded-2xl mt-4">
           <TouchableOpacity
             onPress={() => setActiveTab("ACTIVE")}
@@ -137,10 +159,19 @@ export default function HistoryScreen() {
         </View>
       </LinearGradient>
 
-      {/* Daftar Booking */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchMyBookings();
+            }}
+            tintColor="#013C58"
+          />
+        }
       >
         {filteredBookings.length === 0 ? (
           <View className="bg-white rounded-3xl p-8 items-center border border-slate-100 mt-4">
@@ -154,7 +185,8 @@ export default function HistoryScreen() {
           </View>
         ) : (
           filteredBookings.map((item) => {
-            const statusStyle = STATUS_CONFIG[item.status];
+            const statusStyle =
+              STATUS_CONFIG[item.status] ?? STATUS_CONFIG.PENDING;
             const isExpanded = expandedId === item.id;
 
             return (
@@ -162,7 +194,6 @@ export default function HistoryScreen() {
                 key={item.id}
                 className="bg-white rounded-2xl p-4 mb-4 border border-slate-100 shadow-sm"
               >
-                {/* Baris Kode Booking & Badge Status */}
                 <View className="flex-row items-center justify-between mb-2">
                   <Text className="text-tallero-teal text-xs font-extrabold">
                     {item.bookingCode}
@@ -174,7 +205,6 @@ export default function HistoryScreen() {
                   </View>
                 </View>
 
-                {/* Nama Layanan & Kendaraan */}
                 <Text className="text-tallero-navy font-extrabold text-base">
                   {item.service?.name}
                 </Text>
@@ -182,25 +212,26 @@ export default function HistoryScreen() {
                   {item.outlet?.name}
                 </Text>
 
-                <View className="flex-row items-center gap-2 mt-2">
-                  <View className="bg-slate-100 px-2.5 py-1 rounded-lg flex-row items-center gap-1.5">
-                    <FontAwesome6
-                      name={
-                        item.vehicle?.type === "Motorcycle"
-                          ? "motorcycle"
-                          : "car"
-                      }
-                      size={11}
-                      color="#013C58"
-                    />
-                    <Text className="text-tallero-navy text-[11px] font-bold">
-                      {item.vehicle?.brand} {item.vehicle?.model} (
-                      {item.vehicle?.licensePlate})
-                    </Text>
+                {item.vehicle && (
+                  <View className="flex-row items-center gap-2 mt-2">
+                    <View className="bg-slate-100 px-2.5 py-1 rounded-lg flex-row items-center gap-1.5">
+                      <FontAwesome6
+                        name={
+                          item.vehicle.type === "Motorcycle"
+                            ? "motorcycle"
+                            : "car"
+                        }
+                        size={11}
+                        color="#013C58"
+                      />
+                      <Text className="text-tallero-navy text-[11px] font-bold">
+                        {item.vehicle.brand} {item.vehicle.model} (
+                        {item.vehicle.licensePlate})
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                )}
 
-                {/* Jadwal & Total Biaya + Status Bayar */}
                 <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-slate-100">
                   <View>
                     <Text className="text-slate-400 text-[10px]">
@@ -213,7 +244,7 @@ export default function HistoryScreen() {
 
                   <View className="items-end">
                     <Text className="text-tallero-navy font-extrabold text-sm">
-                      {formatRupiah(item.totalPrice ?? item.service?.price ?? 0)}
+                      {formatRupiah(item.totalPrice ?? item.service?.price)}
                     </Text>
                     <Text
                       className={`text-[10px] font-bold mt-0.5 ${
@@ -222,13 +253,12 @@ export default function HistoryScreen() {
                           : "text-amber-600"
                       }`}
                     >
-                      {item.paymentMethod} •{" "}
+                      {item.paymentMethod ? `${item.paymentMethod} • ` : ""}
                       {item.paymentStatus === "PAID" ? "LUNAS" : "BELUM BAYAR"}
                     </Text>
                   </View>
                 </View>
 
-                {/* Detail Log & Mekanik (Expandable) */}
                 {isExpanded && (
                   <View className="mt-3 pt-3 border-t border-slate-100 bg-slate-50/80 rounded-xl p-3">
                     <Text className="text-tallero-navy text-xs font-extrabold mb-1">
@@ -240,7 +270,7 @@ export default function HistoryScreen() {
 
                     {item.customerNotes ? (
                       <Text className="text-slate-500 text-xs mb-2">
-                        Keluhan: "{item.customerNotes}"
+                        Catatan: "{item.customerNotes}"
                       </Text>
                     ) : null}
 
@@ -250,7 +280,6 @@ export default function HistoryScreen() {
                       </Text>
                     ) : null}
 
-                    {/* Timeline BookingLog */}
                     {item.statusLogs && item.statusLogs.length > 0 && (
                       <View className="mt-2">
                         <Text className="text-tallero-navy text-[11px] font-extrabold uppercase mb-2">
@@ -263,7 +292,7 @@ export default function HistoryScreen() {
                           >
                             <View className="flex-1">
                               <Text className="text-tallero-navy text-xs font-bold">
-                                {STATUS_CONFIG[log.status].label}
+                                {STATUS_CONFIG[log.status]?.label ?? log.status}
                               </Text>
                               {log.notes && (
                                 <Text className="text-slate-500 text-[11px]">
@@ -278,7 +307,6 @@ export default function HistoryScreen() {
                   </View>
                 )}
 
-                {/* Tombol Toggle Detail & Tombol Ulasan */}
                 <View className="flex-row items-center justify-between mt-3 pt-2">
                   <TouchableOpacity
                     onPress={() =>
@@ -296,7 +324,6 @@ export default function HistoryScreen() {
                     />
                   </TouchableOpacity>
 
-                  {/* Tombol Review jika status COMPLETED */}
                   {item.status === "COMPLETED" && !item.review && (
                     <TouchableOpacity
                       onPress={() => setReviewModalBooking(item)}
@@ -329,7 +356,7 @@ export default function HistoryScreen() {
         )}
       </ScrollView>
 
-      {/* Modal Beri Ulasan (Model Review Prisma) */}
+      {/* Modal Beri Ulasan */}
       <Modal
         visible={!!reviewModalBooking}
         transparent
@@ -352,7 +379,6 @@ export default function HistoryScreen() {
               {reviewModalBooking?.outlet?.name}
             </Text>
 
-            {/* Pilihan Bintang 1-5 */}
             <View className="flex-row justify-center gap-3 my-3">
               {[1, 2, 3, 4, 5].map((star) => (
                 <TouchableOpacity
@@ -386,11 +412,16 @@ export default function HistoryScreen() {
 
             <TouchableOpacity
               onPress={handleSubmitReview}
+              disabled={submittingReview}
               className="bg-tallero-navy py-3.5 rounded-xl items-center"
             >
-              <Text className="text-white text-sm font-extrabold">
-                Kirim Ulasan
-              </Text>
+              {submittingReview ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text className="text-white text-sm font-extrabold">
+                  Kirim Ulasan
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

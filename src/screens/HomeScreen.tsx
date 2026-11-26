@@ -1,10 +1,20 @@
-import React from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import React, { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { MainTabParamList } from "../types/navigation";
+import { User, Vehicle, Booking, Service, Outlet } from "../types/models";
+import api, { unwrapData } from "../services/api";
 import {
   MOCK_USER,
   MOCK_VEHICLES,
@@ -20,16 +30,90 @@ type HomeScreenProps = {
 };
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
-  const primaryVehicle = MOCK_VEHICLES[0];
-  const activeBooking = MOCK_BOOKINGS.find(
+  const [user, setUser] = useState<User>(MOCK_USER);
+  const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
+  const [bookings, setBookings] = useState<Booking[]>(MOCK_BOOKINGS);
+  const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
+  const [outlets, setOutlets] = useState<Outlet[]>(MOCK_OUTLETS);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadDashboardData = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("tallero_token");
+
+      // Public endpoints (Outlets & Services)
+      const [srvRes, outRes] = await Promise.allSettled([
+        api.get("/services"),
+        api.get("/outlets"),
+      ]);
+
+      if (srvRes.status === "fulfilled") {
+        const list = unwrapData<Service[]>(srvRes.value);
+        if (Array.isArray(list) && list.length > 0) setServices(list);
+      }
+
+      if (outRes.status === "fulfilled") {
+        const list = unwrapData<Outlet[]>(outRes.value);
+        if (Array.isArray(list) && list.length > 0) setOutlets(list);
+      }
+
+      // Protected endpoints jika user sudah login
+      if (token) {
+        const [meRes, vehRes, bookRes] = await Promise.allSettled([
+          api.get("/auth/me"),
+          api.get("/vehicles/my"),
+          api.get("/bookings/my"),
+        ]);
+
+        if (meRes.status === "fulfilled") {
+          const profile = unwrapData<User>(meRes.value);
+          if (profile?.id) setUser(profile);
+        }
+
+        if (vehRes.status === "fulfilled") {
+          const vehList = unwrapData<Vehicle[]>(vehRes.value);
+          if (Array.isArray(vehList)) setVehicles(vehList);
+        }
+
+        if (bookRes.status === "fulfilled") {
+          const bookList = unwrapData<Booking[]>(bookRes.value);
+          if (Array.isArray(bookList)) setBookings(bookList);
+        }
+      }
+    } catch {
+      // Tetap gunakan fallback data jika server belum menyala
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [loadDashboardData])
+  );
+
+  const primaryVehicle = vehicles[0];
+  const activeBooking = bookings.find(
     (b) => b.status !== "COMPLETED" && b.status !== "CANCELLED"
   );
 
   return (
     <View className="flex-1 bg-slate-50">
       <StatusBar style="light" />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header Gradasi Tallero */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadDashboardData();
+            }}
+            tintColor="#013C58"
+          />
+        }
+      >
         <LinearGradient
           colors={["#012436", "#013C58", "#00537A"]}
           start={{ x: 0, y: 0 }}
@@ -42,14 +126,13 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             borderBottomRightRadius: 32,
           }}
         >
-          {/* Baris Atas: Sapaan & Notifikasi */}
           <View className="flex-row items-center justify-between mb-5">
             <View>
               <Text className="text-tallero-sky text-xs font-medium">
                 Selamat Datang Kembali,
               </Text>
               <Text className="text-white text-xl font-extrabold mt-0.5">
-                {MOCK_USER.name}
+                {user.name}
               </Text>
             </View>
 
@@ -61,8 +144,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             </TouchableOpacity>
           </View>
 
-          {/* Kartu Kendaraan Utama (Model Vehicle) */}
-          {primaryVehicle && (
+          {primaryVehicle ? (
             <TouchableOpacity
               onPress={() => navigation.navigate("Profile")}
               activeOpacity={0.85}
@@ -71,7 +153,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               <View className="flex-row items-center">
                 <View className="w-10 h-10 rounded-xl bg-tallero-amber items-center justify-center mr-3">
                   <FontAwesome6
-                    name={primaryVehicle.type === "Motorcycle" ? "motorcycle" : "car"}
+                    name={
+                      primaryVehicle.type === "Motorcycle" ? "motorcycle" : "car"
+                    }
                     size={18}
                     color="#012436"
                   />
@@ -87,16 +171,24 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               </View>
               <View className="bg-white/15 px-2.5 py-1 rounded-lg">
                 <Text className="text-white text-[11px] font-semibold">
-                  {MOCK_VEHICLES.length} Unit
+                  {vehicles.length} Unit
                 </Text>
               </View>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Profile")}
+              className="bg-white/10 border border-dashed border-white/30 rounded-2xl p-3.5 flex-row items-center justify-between"
+            >
+              <Text className="text-white text-xs font-bold">
+                + Tambah kendaraan pertama kamu untuk booking servis
+              </Text>
+              <FontAwesome6 name="chevron-right" size={12} color="#F5A201" />
             </TouchableOpacity>
           )}
         </LinearGradient>
 
-        {/* Konten Utama */}
         <View className="px-5 pt-5 pb-10">
-          {/* Status Booking Aktif (Model Booking + BookingStatus) */}
           {activeBooking && (
             <View className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-5">
               <View className="flex-row items-center justify-between mb-2">
@@ -126,7 +218,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 {activeBooking.vehicle?.licensePlate}
               </Text>
 
-              {/* Progress Bar 5 Tahap Sesuai Enum BookingStatus */}
               <View className="flex-row items-center gap-1.5 mb-3">
                 {[1, 2, 3, 4, 5].map((step) => {
                   const currentStep = STATUS_CONFIG[activeBooking.status].step;
@@ -152,14 +243,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 className="flex-row items-center justify-between pt-2 border-t border-slate-100"
               >
                 <Text className="text-tallero-teal text-xs font-bold">
-                  Pantau Log & Mekanik ({activeBooking.mechanic?.name || "Menunggu"})
+                  Pantau Log & Mekanik (
+                  {activeBooking.mechanic?.name || "Menunggu"})
                 </Text>
                 <FontAwesome6 name="chevron-right" size={11} color="#00537A" />
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Banner CTA Booking Cepat */}
           <View className="bg-tallero-navy rounded-2xl p-4 mb-6 flex-row items-center justify-between">
             <View className="flex-1 pr-3">
               <Text className="text-tallero-amber text-[11px] font-extrabold uppercase tracking-wider">
@@ -169,7 +260,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 Jadwalkan Servis Tanpa Antre
               </Text>
               <Text className="text-tallero-sky text-xs mt-1">
-                Pilih kendaraan, paket layanan, outlet, & metode bayar.
+                Pilih kendaraan, paket layanan, outlet, & jadwal kedatangan.
               </Text>
             </View>
 
@@ -184,7 +275,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             </TouchableOpacity>
           </View>
 
-          {/* Daftar Paket Layanan (Model Service + Category) */}
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-tallero-navy text-base font-extrabold">
               Daftar Layanan Servis
@@ -196,7 +286,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             </TouchableOpacity>
           </View>
 
-          {MOCK_SERVICES.map((item) => (
+          {services.map((item) => (
             <View
               key={item.id}
               className="bg-white rounded-2xl p-4 mb-3 border border-slate-100 shadow-sm"
@@ -204,7 +294,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               <View className="flex-row items-center justify-between mb-1">
                 <View className="bg-sky-50 px-2.5 py-0.5 rounded-md">
                   <Text className="text-[11px] font-bold text-tallero-teal">
-                    {item.category?.name}
+                    {item.category?.name ?? "Layanan Bengkel"}
                   </Text>
                 </View>
                 <View className="flex-row items-center gap-1">
@@ -237,37 +327,42 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             </View>
           ))}
 
-          {/* Outlet Bengkel (Model Outlet) */}
           <Text className="text-tallero-navy text-base font-extrabold mt-4 mb-3">
             Outlet Bengkel Tallero
           </Text>
 
-          {MOCK_OUTLETS.filter((o) => o.isActive).map((outlet) => (
-            <View
-              key={outlet.id}
-              className="bg-white rounded-2xl p-4 mb-2.5 border border-slate-100 flex-row items-center justify-between"
-            >
-              <View className="flex-row items-center flex-1 pr-2">
-                <View className="w-9 h-9 rounded-full bg-amber-50 items-center justify-center mr-3">
-                  <FontAwesome6 name="location-dot" size={15} color="#F5A201" />
+          {outlets
+            .filter((o) => o.isActive)
+            .map((outlet) => (
+              <View
+                key={outlet.id}
+                className="bg-white rounded-2xl p-4 mb-2.5 border border-slate-100 flex-row items-center justify-between"
+              >
+                <View className="flex-row items-center flex-1 pr-2">
+                  <View className="w-9 h-9 rounded-full bg-amber-50 items-center justify-center mr-3">
+                    <FontAwesome6
+                      name="location-dot"
+                      size={15}
+                      color="#F5A201"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-tallero-navy font-bold text-sm">
+                      {outlet.name}
+                    </Text>
+                    <Text className="text-slate-500 text-xs mt-0.5">
+                      {outlet.address}
+                    </Text>
+                  </View>
                 </View>
-                <View className="flex-1">
-                  <Text className="text-tallero-navy font-bold text-sm">
-                    {outlet.name}
-                  </Text>
-                  <Text className="text-slate-500 text-xs mt-0.5">
-                    {outlet.address}
-                  </Text>
-                </View>
-              </View>
 
-              <View className="bg-emerald-50 px-2.5 py-1 rounded-full">
-                <Text className="text-emerald-700 text-[10px] font-bold">
-                  Aktif
-                </Text>
+                <View className="bg-emerald-50 px-2.5 py-1 rounded-full">
+                  <Text className="text-emerald-700 text-[10px] font-bold">
+                    Aktif
+                  </Text>
+                </View>
               </View>
-            </View>
-          ))}
+            ))}
         </View>
       </ScrollView>
     </View>

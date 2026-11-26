@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,30 +7,64 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import { CommonActions } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CommonActions, useFocusEffect } from "@react-navigation/native";
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { MainTabParamList } from "../types/navigation";
-import { Vehicle } from "../types/models";
+import { User, Vehicle } from "../types/models";
+import api, { unwrapData, getErrorMessage } from "../services/api";
 import { MOCK_USER, MOCK_VEHICLES } from "../constants/mockData";
 
 type ProfileScreenProps = BottomTabScreenProps<MainTabParamList, "Profile">;
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
+  const [user, setUser] = useState<User>(MOCK_USER);
   const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [savingVehicle, setSavingVehicle] = useState(false);
 
-  // Form state sesuai tabel Vehicle Prisma
   const [licensePlate, setLicensePlate] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [type, setType] = useState<"Car" | "Motorcycle">("Car");
   const [year, setYear] = useState("");
 
-  const handleAddVehicle = () => {
+  const loadProfileAndVehicles = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("tallero_token");
+      if (!token) return;
+
+      const [meRes, vehRes] = await Promise.allSettled([
+        api.get("/auth/me"),
+        api.get("/vehicles/my"),
+      ]);
+
+      if (meRes.status === "fulfilled") {
+        const profile = unwrapData<User>(meRes.value);
+        if (profile?.id) setUser(profile);
+      }
+
+      if (vehRes.status === "fulfilled") {
+        const list = unwrapData<Vehicle[]>(vehRes.value);
+        if (Array.isArray(list)) setVehicles(list);
+      }
+    } catch {
+      // Gunakan fallback
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfileAndVehicles();
+    }, [loadProfileAndVehicles])
+  );
+
+  const handleAddVehicle = async () => {
     if (!licensePlate.trim() || !brand.trim() || !model.trim() || !year.trim()) {
       Alert.alert(
         "Data Belum Lengkap",
@@ -45,23 +79,28 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       return;
     }
 
-    const newVehicle: Vehicle = {
-      id: Date.now(),
-      userId: MOCK_USER.id,
-      licensePlate: licensePlate.trim().toUpperCase(),
-      brand: brand.trim(),
-      model: model.trim(),
-      type,
-      year: parsedYear,
-    };
+    try {
+      setSavingVehicle(true);
+      await api.post("/vehicles", {
+        licensePlate: licensePlate.trim().toUpperCase(),
+        brand: brand.trim(),
+        model: model.trim(),
+        type,
+        year: parsedYear,
+      });
 
-    setVehicles((prev) => [...prev, newVehicle]);
-    setLicensePlate("");
-    setBrand("");
-    setModel("");
-    setYear("");
-    setShowAddModal(false);
-    Alert.alert("Berhasil", "Kendaraan baru ditambahkan ke garasi.");
+      setLicensePlate("");
+      setBrand("");
+      setModel("");
+      setYear("");
+      setShowAddModal(false);
+      await loadProfileAndVehicles();
+      Alert.alert("Berhasil", "Kendaraan baru ditambahkan ke garasi.");
+    } catch (error) {
+      Alert.alert("Gagal Menambah Kendaraan", getErrorMessage(error));
+    } finally {
+      setSavingVehicle(false);
+    }
   };
 
   const handleDeleteVehicle = (id: number) => {
@@ -70,7 +109,14 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       {
         text: "Hapus",
         style: "destructive",
-        onPress: () => setVehicles((prev) => prev.filter((v) => v.id !== id)),
+        onPress: async () => {
+          try {
+            await api.delete(`/vehicles/${id}`);
+            await loadProfileAndVehicles();
+          } catch (error) {
+            Alert.alert("Gagal Menghapus", getErrorMessage(error));
+          }
+        },
       },
     ]);
   };
@@ -81,7 +127,8 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       {
         text: "Keluar",
         style: "destructive",
-        onPress: () => {
+        onPress: async () => {
+          await AsyncStorage.multiRemove(["tallero_token", "tallero_user"]);
           navigation.getParent()?.dispatch(
             CommonActions.reset({
               index: 0,
@@ -97,7 +144,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     <View className="flex-1 bg-slate-50">
       <StatusBar style="light" />
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header Gradasi Profil */}
         <LinearGradient
           colors={["#012436", "#013C58", "#00537A"]}
           start={{ x: 0, y: 0 }}
@@ -113,7 +159,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         >
           <View className="w-20 h-20 rounded-full bg-tallero-amber items-center justify-center border-4 border-white/25 mb-3">
             <Text className="text-tallero-dark text-2xl font-extrabold">
-              {MOCK_USER.name
+              {user.name
                 .split(" ")
                 .map((n) => n[0])
                 .join("")
@@ -124,20 +170,19 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
           <View className="flex-row items-center gap-1.5">
             <Text className="text-white text-xl font-extrabold">
-              {MOCK_USER.name}
+              {user.name}
             </Text>
-            {MOCK_USER.isVerified && (
+            {user.isVerified && (
               <FontAwesome6 name="circle-check" size={14} color="#F5A201" />
             )}
           </View>
 
           <Text className="text-tallero-sky text-xs mt-1">
-            {MOCK_USER.email} • {MOCK_USER.phone}
+            {user.email} • {user.phone}
           </Text>
         </LinearGradient>
 
         <View className="px-5 pt-5 pb-10">
-          {/* Garasi Kendaraan Saya (Model Vehicle) */}
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-tallero-navy text-base font-extrabold">
               Kendaraan Saya ({vehicles.length})
@@ -166,11 +211,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 </View>
 
                 <View className="flex-1">
-                  <View className="flex-row items-center gap-2">
-                    <Text className="text-tallero-navy font-extrabold text-sm">
-                      {v.brand} {v.model}
-                    </Text>
-                  </View>
+                  <Text className="text-tallero-navy font-extrabold text-sm">
+                    {v.brand} {v.model}
+                  </Text>
                   <Text className="text-slate-500 text-xs mt-0.5">
                     {v.licensePlate} • {v.type === "Car" ? "Mobil" : "Motor"} (
                     {v.year})
@@ -178,18 +221,15 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 </View>
               </View>
 
-              {vehicles.length > 1 && (
-                <TouchableOpacity
-                  onPress={() => handleDeleteVehicle(v.id)}
-                  className="p-2"
-                >
-                  <FontAwesome6 name="trash-can" size={14} color="#ef4444" />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                onPress={() => handleDeleteVehicle(v.id)}
+                className="p-2"
+              >
+                <FontAwesome6 name="trash-can" size={14} color="#ef4444" />
+              </TouchableOpacity>
             </View>
           ))}
 
-          {/* Informasi Akun (Model User) */}
           <Text className="text-tallero-navy text-base font-extrabold mt-4 mb-3">
             Informasi Akun
           </Text>
@@ -198,19 +238,18 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             <View className="pb-3 border-b border-slate-100">
               <Text className="text-slate-400 text-[11px]">Nomor Telepon</Text>
               <Text className="text-tallero-navy font-bold text-sm mt-0.5">
-                {MOCK_USER.phone}
+                {user.phone}
               </Text>
             </View>
 
             <View className="pt-3">
               <Text className="text-slate-400 text-[11px]">Alamat Lengkap</Text>
               <Text className="text-tallero-navy font-bold text-sm mt-0.5">
-                {MOCK_USER.address || "Belum diatur"}
+                {user.address || "Belum diatur"}
               </Text>
             </View>
           </View>
 
-          {/* Tombol Keluar */}
           <TouchableOpacity
             onPress={handleLogout}
             activeOpacity={0.85}
@@ -228,7 +267,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         </View>
       </ScrollView>
 
-      {/* Modal Tambah Kendaraan (Model Vehicle Prisma) */}
+      {/* Modal Tambah Kendaraan */}
       <Modal
         visible={showAddModal}
         transparent
@@ -246,7 +285,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               </TouchableOpacity>
             </View>
 
-            {/* Jenis Kendaraan */}
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Jenis Kendaraan
             </Text>
@@ -277,7 +315,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               ))}
             </View>
 
-            {/* Plat Nomor */}
             <Text className="text-tallero-navy text-xs font-bold mb-1">
               Nomor Polisi (Plat)
             </Text>
@@ -289,7 +326,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 mb-3"
             />
 
-            {/* Merek & Model */}
             <View className="flex-row gap-2 mb-3">
               <View className="flex-1">
                 <Text className="text-tallero-navy text-xs font-bold mb-1">
@@ -315,7 +351,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               </View>
             </View>
 
-            {/* Tahun */}
             <Text className="text-tallero-navy text-xs font-bold mb-1">
               Tahun Pembuatan
             </Text>
@@ -330,11 +365,16 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
             <TouchableOpacity
               onPress={handleAddVehicle}
+              disabled={savingVehicle}
               className="bg-tallero-amber py-3.5 rounded-xl items-center"
             >
-              <Text className="text-tallero-dark text-sm font-extrabold">
-                Simpan Kendaraan
-              </Text>
+              {savingVehicle ? (
+                <ActivityIndicator color="#012436" size="small" />
+              ) : (
+                <Text className="text-tallero-dark text-sm font-extrabold">
+                  Simpan Kendaraan
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
