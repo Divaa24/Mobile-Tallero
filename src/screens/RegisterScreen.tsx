@@ -32,14 +32,16 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // State Modal Verifikasi OTP (POST /auth/verify-otp)
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   const handleRegister = async () => {
     if (!name.trim() || !phone.trim() || !email.trim() || !password.trim()) {
-      Alert.alert("Data Belum Lengkap", "Lengkapi nama, nomor HP, email, dan kata sandi.");
+      Alert.alert(
+        "Data Belum Lengkap",
+        "Lengkapi nama, nomor HP, email, dan kata sandi."
+      );
       return;
     }
 
@@ -59,11 +61,13 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       if (token) {
         await AsyncStorage.setItem("tallero_token", token);
         if (payload?.user) {
-          await AsyncStorage.setItem("tallero_user", JSON.stringify(payload.user));
+          await AsyncStorage.setItem(
+            "tallero_user",
+            JSON.stringify(payload.user)
+          );
         }
         navigation.replace("MainApp");
       } else {
-        // Jika backend mengirim OTP ke email
         setShowOtpModal(true);
       }
     } catch (error) {
@@ -75,7 +79,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 
   const handleVerifyOtp = async () => {
     if (otpCode.trim().length !== 6) {
-      Alert.alert("Kode OTP Tidak Valid", "Masukkan 6 digit kode OTP dari email kamu.");
+      Alert.alert(
+        "Kode OTP Tidak Valid",
+        "Masukkan 6 digit kode OTP dari email kamu."
+      );
       return;
     }
 
@@ -100,7 +107,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         ]);
       }
     } catch (error) {
-      Alert.alert("Verifikasi Gagal", getErrorMessage(error, "Kode OTP salah atau kedaluwarsa."));
+      Alert.alert(
+        "Verifikasi Gagal",
+        getErrorMessage(error, "Kode OTP salah atau kedaluwarsa.")
+      );
     } finally {
       setVerifyingOtp(false);
     }
@@ -109,7 +119,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-slate-50"
+      className="flex-1 bg-slate-100"
     >
       <StatusBar style="light" />
       <ScrollView
@@ -118,33 +128,44 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         keyboardShouldPersistTaps="handled"
       >
         <LinearGradient
-          colors={["#012436", "#013C58", "#00537A"]}
+          colors={["#011C2B", "#013C58", "#00537A"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          className="pt-14 pb-16 px-6 rounded-b-[36px]"
+          style={{
+            paddingTop: 50,
+            paddingBottom: 56,
+            paddingHorizontal: 24,
+            borderBottomLeftRadius: 36,
+            borderBottomRightRadius: 36,
+          }}
         >
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            className="w-9 h-9 rounded-full bg-white/15 items-center justify-center mb-4"
+            className="w-10 h-10 rounded-2xl bg-white/15 items-center justify-center mb-4"
           >
             <FontAwesome6 name="arrow-left" size={14} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <Text className="text-white text-2xl font-extrabold">
+          <Text className="text-tallero-amber text-[11px] font-extrabold uppercase tracking-wider">
+            Registrasi Pelanggan
+          </Text>
+          <Text className="text-white text-2xl font-extrabold mt-0.5">
             Buat Akun Baru
           </Text>
           <Text className="text-tallero-sky text-xs mt-1">
-            Booking servis bengkel jadi lebih cepat tanpa antre
+            Daftar sekarang untuk booking servis tanpa antre
           </Text>
         </LinearGradient>
 
-        <View className="px-6 -mt-8 flex-1 justify-between pb-8">
-          <View className="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
+        <View className="px-5 -mt-8 flex-1 justify-between pb-8">
+          <View className="bg-white rounded-3xl p-6 shadow-lg border border-slate-100">
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Nama Lengkap
             </Text>
-            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-3.5">
-              <FontAwesome6 name="user" size={14} color="#00537A" />
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 mb-3.5">
+              <View className="w-8 h-8 rounded-xl bg-sky-100/80 items-center justify-center">
+                <FontAwesome6 name="user" size={13} color="#013C58" />
+              </View>
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -157,8 +178,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Nomor WhatsApp
             </Text>
-            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-3.5">
-              <FontAwesome6 name="phone" size={14} color="#00537A" />
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 mb-3.5">
+              <View className="w-8 h-8 rounded-xl bg-sky-100/80 items-center justify-center">
+                <FontAwesome6 name="phone" size={13} color="#013C58" />
+              </View>
               <TextInput
                 value={phone}
                 onChangeText={setPhone}
@@ -170,10 +193,12 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             </View>
 
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
-              Email
+              Alamat Email
             </Text>
-            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-3.5">
-              <FontAwesome6 name="envelope" size={14} color="#00537A" />
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 mb-3.5">
+              <View className="w-8 h-8 rounded-xl bg-sky-100/80 items-center justify-center">
+                <FontAwesome6 name="envelope" size={13} color="#013C58" />
+              </View>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
@@ -188,8 +213,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Alamat (Opsional)
             </Text>
-            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-3.5">
-              <FontAwesome6 name="location-dot" size={14} color="#00537A" />
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 mb-3.5">
+              <View className="w-8 h-8 rounded-xl bg-sky-100/80 items-center justify-center">
+                <FontAwesome6 name="location-dot" size={13} color="#013C58" />
+              </View>
               <TextInput
                 value={address}
                 onChangeText={setAddress}
@@ -202,8 +229,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             <Text className="text-tallero-navy text-xs font-bold mb-1.5">
               Kata Sandi
             </Text>
-            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-6">
-              <FontAwesome6 name="lock" size={14} color="#00537A" />
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 mb-6">
+              <View className="w-8 h-8 rounded-xl bg-sky-100/80 items-center justify-center">
+                <FontAwesome6 name="lock" size={13} color="#013C58" />
+              </View>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
@@ -214,7 +243,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                className="p-1.5"
               >
                 <FontAwesome6
                   name={showPassword ? "eye-slash" : "eye"}
@@ -228,17 +257,14 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               onPress={handleRegister}
               disabled={loading}
               activeOpacity={0.85}
-              className="bg-tallero-amber py-3.5 rounded-xl flex-row items-center justify-center gap-2 shadow-sm"
+              className="bg-tallero-amber py-4 rounded-2xl items-center justify-center shadow-sm"
             >
               {loading ? (
                 <ActivityIndicator color="#012436" size="small" />
               ) : (
-                <>
-                  <Text className="text-tallero-dark font-extrabold text-sm">
-                    Daftar Akun Tallero
-                  </Text>
-                  <FontAwesome6 name="check" size={14} color="#012436" />
-                </>
+                <Text className="text-tallero-dark font-extrabold text-sm">
+                  Daftar Akun Tallero
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -254,7 +280,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         </View>
       </ScrollView>
 
-      {/* Modal Verifikasi OTP 6 Digit */}
+      {/* Modal Verifikasi OTP */}
       <Modal
         visible={showOtpModal}
         transparent

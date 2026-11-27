@@ -30,7 +30,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Data Belum Lengkap", "Masukkan email dan kata sandi terlebih dahulu.");
+      Alert.alert(
+        "Data Belum Lengkap",
+        "Masukkan email dan kata sandi terlebih dahulu."
+      );
       return;
     }
 
@@ -54,7 +57,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
       navigation.replace("MainApp");
     } catch (error) {
-      Alert.alert("Login Gagal", getErrorMessage(error, "Email atau kata sandi salah."));
+      Alert.alert(
+        "Login Gagal",
+        getErrorMessage(error, "Email atau kata sandi salah.")
+      );
     } finally {
       setLoading(false);
     }
@@ -63,7 +69,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-slate-50"
+      className="flex-1 bg-slate-100"
     >
       <StatusBar style="light" />
       <ScrollView
@@ -71,37 +77,57 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Header Gradasi */}
         <LinearGradient
-          colors={["#012436", "#013C58", "#00537A"]}
+          colors={["#011C2B", "#013C58", "#00537A"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          className="pt-16 pb-20 px-6 rounded-b-[36px] items-center"
+          style={{
+            paddingTop: 56,
+            paddingBottom: 74,
+            paddingHorizontal: 24,
+            borderBottomLeftRadius: 36,
+            borderBottomRightRadius: 36,
+            alignItems: "center",
+          }}
         >
-          <View className="w-16 h-16 rounded-full bg-white items-center justify-center shadow-lg mb-3">
-            <FontAwesome6 name="gear" size={28} color="#013C58" />
+          {/* Badge Logo */}
+          <View className="p-2 rounded-3xl bg-white/10 mb-3">
+            <View className="w-16 h-16 rounded-2xl bg-white items-center justify-center shadow-md">
+              <FontAwesome6 name="gear" size={30} color="#013C58" />
+              <View className="w-3.5 h-3.5 rounded-full bg-tallero-amber border-2 border-white absolute -top-1 -right-1" />
+            </View>
           </View>
-          <Text className="text-white text-2xl font-extrabold tracking-[4px]">
+
+          <Text className="text-white text-2xl font-extrabold tracking-[5px]">
             TALLERO
           </Text>
-          <Text className="text-tallero-sky text-xs font-medium mt-1">
-            Masuk untuk kelola servis kendaraanmu
-          </Text>
+
+          <View className="bg-tallero-amber/20 border border-tallero-amber/40 px-3 py-1 rounded-full mt-2">
+            <Text className="text-tallero-amber text-[10px] font-extrabold tracking-widest uppercase">
+              Smart Workshop & Service
+            </Text>
+          </View>
         </LinearGradient>
 
-        <View className="px-6 -mt-12 flex-1 justify-between pb-8">
-          <View className="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
-            <Text className="text-tallero-navy text-xl font-extrabold mb-1">
+        {/* Kartu Form Mengambang */}
+        <View className="px-5 -mt-11 flex-1 justify-between pb-8">
+          <View className="bg-white rounded-3xl p-6 shadow-lg border border-slate-100">
+            <Text className="text-tallero-navy text-xl font-extrabold">
               Selamat Datang
             </Text>
-            <Text className="text-slate-400 text-xs mb-6">
-              Silakan masuk menggunakan akun pelanggan Tallero
+            <Text className="text-slate-400 text-xs mt-1 mb-6">
+              Masuk untuk reservasi dan pantau progres servis kendaraanmu
             </Text>
 
+            {/* Input Email */}
             <Text className="text-tallero-navy text-xs font-bold mb-2">
-              Email
+              Alamat Email
             </Text>
-            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-4">
-              <FontAwesome6 name="envelope" size={14} color="#00537A" />
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 mb-4">
+              <View className="w-8 h-8 rounded-xl bg-sky-100/80 items-center justify-center">
+                <FontAwesome6 name="envelope" size={13} color="#013C58" />
+              </View>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
@@ -113,11 +139,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               />
             </View>
 
+            {/* Input Kata Sandi */}
             <Text className="text-tallero-navy text-xs font-bold mb-2">
               Kata Sandi
             </Text>
-            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-5">
-              <FontAwesome6 name="lock" size={14} color="#00537A" />
+            <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 mb-6">
+              <View className="w-8 h-8 rounded-xl bg-sky-100/80 items-center justify-center">
+                <FontAwesome6 name="lock" size={13} color="#013C58" />
+              </View>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
@@ -128,7 +157,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                className="p-1.5"
               >
                 <FontAwesome6
                   name={showPassword ? "eye-slash" : "eye"}
@@ -138,40 +167,31 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               </TouchableOpacity>
             </View>
 
+            {/* Tombol Utama */}
             <TouchableOpacity
               onPress={handleLogin}
               disabled={loading}
               activeOpacity={0.85}
-              className="bg-tallero-navy py-3.5 rounded-xl flex-row items-center justify-center gap-2 shadow-md"
+              className="bg-tallero-navy py-4 rounded-2xl items-center justify-center shadow-md"
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <>
-                  <Text className="text-white font-bold text-sm tracking-wide">
-                    Masuk Sekarang
-                  </Text>
-                  <FontAwesome6 name="arrow-right" size={13} color="#F5A201" />
-                </>
+                <Text className="text-white font-extrabold text-sm tracking-wide">
+                  Masuk Sekarang
+                </Text>
               )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => navigation.replace("MainApp")}
-              activeOpacity={0.8}
-              className="mt-3 py-3 rounded-xl border border-tallero-amber/60 bg-tallero-amber/10 items-center"
-            >
-              <Text className="text-tallero-navy text-xs font-bold">
-                Lewati Login (Mode Pratinjau UI)
-              </Text>
             </TouchableOpacity>
           </View>
 
+          {/* Footer Daftar */}
           <View className="flex-row justify-center items-center mt-6">
-            <Text className="text-slate-500 text-xs">Belum punya akun? </Text>
+            <Text className="text-slate-500 text-xs">
+              Belum punya akun pelanggan?{" "}
+            </Text>
             <TouchableOpacity onPress={() => navigation.navigate("Register")}>
               <Text className="text-tallero-navy font-extrabold text-xs underline">
-                Daftar di sini
+                Daftar Sekarang
               </Text>
             </TouchableOpacity>
           </View>
