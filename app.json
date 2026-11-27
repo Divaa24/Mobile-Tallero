@@ -1,25 +1,24 @@
 {
   "expo": {
-    "name": "temp-tallero",
-    "slug": "temp-tallero",
+    "name": "Tallero",
+    "slug": "mobile-tallero",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/tallero.png",
     "userInterfaceStyle": "light",
-    "ios": {
-      "supportsTablet": true
+    "splash": {
+      "image": "./assets/tallero.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#013C58"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
+        "foregroundImage": "./assets/tallero.png",
+        "backgroundColor": "#013C58"
+      }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/tallero.png"
     }
   }
 }

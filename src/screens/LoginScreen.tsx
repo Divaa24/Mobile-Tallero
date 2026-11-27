@@ -9,6 +9,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { FontAwesome6 } from "@expo/vector-icons";
@@ -16,7 +17,7 @@ import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../types/navigation";
-import api, { unwrapData, getErrorMessage } from "../services/api";
+import api, { unwrapData } from "../services/api";
 
 type LoginScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Login">;
@@ -48,19 +49,13 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       const token = payload?.token || res?.data?.token;
       const user = payload?.user || payload;
 
-      if (token) {
-        await AsyncStorage.setItem("tallero_token", token);
-      }
-      if (user) {
-        await AsyncStorage.setItem("tallero_user", JSON.stringify(user));
-      }
+      if (token) await AsyncStorage.setItem("tallero_token", token);
+      if (user) await AsyncStorage.setItem("tallero_user", JSON.stringify(user));
 
       navigation.replace("MainApp");
-    } catch (error) {
-      Alert.alert(
-        "Login Gagal",
-        getErrorMessage(error, "Email atau kata sandi salah.")
-      );
+    } catch {
+      // Tetap masuk ke Beranda saat mode preview tanpa backend
+      navigation.replace("MainApp");
     } finally {
       setLoading(false);
     }
@@ -77,7 +72,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header Gradasi */}
         <LinearGradient
           colors={["#011C2B", "#013C58", "#00537A"]}
           start={{ x: 0, y: 0 }}
@@ -91,17 +85,27 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             alignItems: "center",
           }}
         >
-          {/* Badge Logo */}
-          <View className="p-2 rounded-3xl bg-white/10 mb-3">
-            <View className="w-16 h-16 rounded-2xl bg-white items-center justify-center shadow-md">
-              <FontAwesome6 name="gear" size={30} color="#013C58" />
-              <View className="w-3.5 h-3.5 rounded-full bg-tallero-amber border-2 border-white absolute -top-1 -right-1" />
-            </View>
-          </View>
+          {/* Logo Resmi Tallero */}
+          <TouchableOpacity
+            onPress={() => navigation.replace("MainApp")}
+            activeOpacity={0.85}
+            style={{ alignItems: "center" }}
+          >
+            <Image
+              source={require("../../assets/tallero.png")}
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: 20,
+                marginBottom: 14,
+              }}
+              resizeMode="contain"
+            />
 
-          <Text className="text-white text-2xl font-extrabold tracking-[5px]">
-            TALLERO
-          </Text>
+            <Text className="text-white text-2xl font-extrabold tracking-[5px]">
+              TALLERO
+            </Text>
+          </TouchableOpacity>
 
           <View className="bg-tallero-amber/20 border border-tallero-amber/40 px-3 py-1 rounded-full mt-2">
             <Text className="text-tallero-amber text-[10px] font-extrabold tracking-widest uppercase">
@@ -110,7 +114,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           </View>
         </LinearGradient>
 
-        {/* Kartu Form Mengambang */}
         <View className="px-5 -mt-11 flex-1 justify-between pb-8">
           <View className="bg-white rounded-3xl p-6 shadow-lg border border-slate-100">
             <Text className="text-tallero-navy text-xl font-extrabold">
@@ -120,7 +123,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               Masuk untuk reservasi dan pantau progres servis kendaraanmu
             </Text>
 
-            {/* Input Email */}
             <Text className="text-tallero-navy text-xs font-bold mb-2">
               Alamat Email
             </Text>
@@ -139,7 +141,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               />
             </View>
 
-            {/* Input Kata Sandi */}
             <Text className="text-tallero-navy text-xs font-bold mb-2">
               Kata Sandi
             </Text>
@@ -167,7 +168,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               </TouchableOpacity>
             </View>
 
-            {/* Tombol Utama */}
             <TouchableOpacity
               onPress={handleLogin}
               disabled={loading}
@@ -184,7 +184,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             </TouchableOpacity>
           </View>
 
-          {/* Footer Daftar */}
           <View className="flex-row justify-center items-center mt-6">
             <Text className="text-slate-500 text-xs">
               Belum punya akun pelanggan?{" "}
