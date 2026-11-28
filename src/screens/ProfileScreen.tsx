@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Alert,
+  ActivityIndicator,
   StyleSheet,
   Platform,
 } from "react-native";
@@ -13,52 +15,66 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api, { unwrapData } from "../services/api";
 
-const DEFAULT_VEHICLES = [
-  { id: "veh-1", brand: "Toyota", model: "Avanza Veloz", year: 2023, licensePlate: "B 1428 TLR" },
-  { id: "veh-2", brand: "Honda", model: "PCX 160", year: 2024, licensePlate: "B 4812 KLM" },
-];
-
 export default function ProfileScreen({ navigation }: any) {
-  const [user, setUser] = useState({ name: "Pelanggan Tallero", email: "pelanggan@talleroauto.com" });
-  const [vehicles, setVehicles] = useState(DEFAULT_VEHICLES);
+  const [user, setUser] = useState({ name: "Pelanggan Tallero", email: "-" });
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [plate, setPlate] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    AsyncStorage.getItem("tallero_user").then((raw) => {
+  const loadData = async () => {
+    try {
+      const raw = await AsyncStorage.getItem("tallero_user");
       if (raw) {
         const u = JSON.parse(raw);
-        setUser((prev) => ({ name: u?.name || prev.name, email: u?.email || prev.email }));
+        setUser({ name: u?.name || "Pelanggan Tallero", email: u?.email || "-" });
       }
-    });
 
-    api.get("/vehicles")
-      .then((res) => {
-        const list = unwrapData(res);
-        if (Array.isArray(list) && list.length > 0) setVehicles(list);
-      })
-      .catch(() => {});
+      const res = await api.get("/vehicles");
+      const list = unwrapData(res);
+      if (Array.isArray(list)) setVehicles(list);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   const addVehicle = async () => {
-    if (!brand.trim() || !plate.trim()) return;
-    const item = {
-      id: "v-" + Date.now(),
-      brand: brand.trim(),
-      model: model.trim(),
-      year: 2024,
-      licensePlate: plate.trim().toUpperCase(),
-    };
+    if (!brand.trim() || !model.trim() || !plate.trim()) {
+      Alert.alert("Data Kurang", "Merek, model, dan nomor polisi wajib diisi.");
+      return;
+    }
+
     try {
-      await api.post("/vehicles", { ...item, type: "CAR" });
-    } catch {}
-    setVehicles((prev) => [item, ...prev]);
-    setBrand("");
-    setModel("");
-    setPlate("");
-    setModalOpen(false);
+      setSaving(true);
+      await api.post("/vehicles", {
+        brand: brand.trim(),
+        model: model.trim(),
+        year: new Date().getFullYear(),
+        licensePlate: plate.trim().toUpperCase(),
+        type: "CAR",
+      });
+
+      setBrand("");
+      setModel("");
+      setPlate("");
+      setModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      Alert.alert(
+        "Gagal Menyimpan",
+        err?.response?.data?.message || "Gagal menambahkan kendaraan ke database."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const logout = async () => {
@@ -77,7 +93,6 @@ export default function ProfileScreen({ navigation }: any) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* Kartu User */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
             <Ionicons name="person" size={24} color="#1D4ED8" />
@@ -88,7 +103,6 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Garasi Kendaraan */}
         <View style={styles.rowBetween}>
           <Text style={styles.sectionTitle}>Kendaraan Saya</Text>
           <TouchableOpacity onPress={() => setModalOpen(true)}>
@@ -96,22 +110,30 @@ export default function ProfileScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {vehicles.map((v) => (
-          <View key={v.id} style={styles.vehicleCard}>
-            <View style={styles.vehicleIconBox}>
-              <Ionicons name="car-outline" size={20} color="#1D4ED8" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.vehicleTitle}>
-                {v.brand} {v.model}
-              </Text>
-              <Text style={styles.userEmail}>Tahun {v.year}</Text>
-            </View>
-            <View style={styles.platePill}>
-              <Text style={styles.plateText}>{v.licensePlate}</Text>
-            </View>
+        {loading ? (
+          <ActivityIndicator size="small" color="#1D4ED8" style={{ marginTop: 20 }} />
+        ) : vehicles.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.userEmail}>Belum ada kendaraan terdaftar. Klik "+ Tambah".</Text>
           </View>
-        ))}
+        ) : (
+          vehicles.map((v) => (
+            <View key={v.id} style={styles.vehicleCard}>
+              <View style={styles.vehicleIconBox}>
+                <Ionicons name="car-outline" size={20} color="#1D4ED8" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.vehicleTitle}>
+                  {v.brand} {v.model}
+                </Text>
+                <Text style={styles.userEmail}>Tahun {v.year}</Text>
+              </View>
+              <View style={styles.platePill}>
+                <Text style={styles.plateText}>{v.licensePlate}</Text>
+              </View>
+            </View>
+          ))
+        )}
       </ScrollView>
 
       <Modal visible={modalOpen} transparent animationType="slide">
@@ -145,8 +167,12 @@ export default function ProfileScreen({ navigation }: any) {
               autoCapitalize="characters"
               style={styles.input}
             />
-            <TouchableOpacity style={styles.saveBtn} onPress={addVehicle}>
-              <Text style={styles.saveBtnText}>Simpan Kendaraan</Text>
+            <TouchableOpacity style={styles.saveBtn} disabled={saving} onPress={addVehicle}>
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.saveBtnText}>Simpan Kendaraan</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -179,24 +205,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F1F5F9",
   },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" },
   userName: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
   userEmail: { fontSize: 12, color: "#64748B", marginTop: 2 },
-  rowBetween: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
+  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   sectionTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
   addText: { fontSize: 12, fontWeight: "600", color: "#1D4ED8" },
+  emptyCard: { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 18, alignItems: "center" },
   vehicleCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -207,24 +222,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F1F5F9",
   },
-  vehicleIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  vehicleIconBox: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" },
   vehicleTitle: { fontSize: 14, fontWeight: "700", color: "#0F172A" },
   platePill: { backgroundColor: "#EFF6FF", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   plateText: { fontSize: 11, fontWeight: "700", color: "#1D4ED8" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.4)", justifyContent: "flex-end" },
-  sheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-  },
+  sheet: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
   input: {
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
@@ -236,12 +239,6 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     marginBottom: 10,
   },
-  saveBtn: {
-    backgroundColor: "#1D4ED8",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 4,
-  },
+  saveBtn: { backgroundColor: "#1D4ED8", paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 4 },
   saveBtnText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
 });

@@ -7,11 +7,12 @@ import {
   TextInput,
   Modal,
   Image,
+  Alert,
+  ActivityIndicator,
   StyleSheet,
   Platform,
-  Linking,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api, { unwrapData } from "../services/api";
 
@@ -20,7 +21,6 @@ interface OutletItem {
   name: string;
   city: string;
   address: string;
-  phone: string;
 }
 
 interface ServiceItem {
@@ -29,457 +29,508 @@ interface ServiceItem {
   description: string;
   price: number;
   durationMinutes: number;
-  categoryId: string;
-  categoryName: string;
-  rating: string;
-  reviewCount: number;
-  imageUrl: string;
+  categoryId?: string;
+  rating?: string;
+  reviewsCount?: number;
+  imageUrl?: string;
 }
 
-const MECHANIC_HERO_IMG =
-  "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=600&q=80";
+interface VehicleItem {
+  id: string;
+  brand: string;
+  model: string;
+  licensePlate: string;
+}
 
-const QUICK_MENU = [
-  { id: "cat-1", label: "Berkala", icon: "tool" as const },
-  { id: "cat-2", label: "Ganti Oli", icon: "droplet" as const },
-  { id: "cat-3", label: "Kelistrikan", icon: "zap" as const },
-  { id: "cat-4", label: "AC Mobil", icon: "wind" as const },
-  { id: "cat-5", label: "Rem & Kaki", icon: "disc" as const },
-  { id: "cat-6", label: "Spooring", icon: "compass" as const },
-  { id: "cat-7", label: "Tune Up", icon: "sliders" as const },
-  { id: "all", label: "Lainnya", icon: "grid" as const },
+const SERVICE_IMAGES = [
+  "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=600&q=80",
 ];
 
-const FILTER_CHIPS = [
-  { id: "all", label: "Semua" },
-  { id: "cat-1", label: "Berkala" },
-  { id: "cat-2", label: "Ganti Oli" },
-  { id: "cat-4", label: "AC Mobil" },
-  { id: "cat-5", label: "Rem & Kaki" },
-];
-
-const FALLBACK_OUTLETS: OutletItem[] = [
-  { id: "outlet-1", name: "Tallero Auto Depok", city: "Depok, Jawa Barat", address: "Jl. Margonda Raya No. 214", phone: "+628110000001" },
-  { id: "outlet-2", name: "Tallero Express Cibubur", city: "Jakarta Timur", address: "Jl. Alternatif Cibubur Km. 4", phone: "+628110000002" },
-  { id: "outlet-3", name: "Tallero Flagship BSD", city: "Tangerang Selatan", address: "Jl. Pahlawan Seribu Sektor IV", phone: "+628110000003" },
-];
-
-const FALLBACK_SERVICES: ServiceItem[] = [
-  {
-    id: "srv-1",
-    name: "Servis Berkala 10.000 KM",
-    description: "Pengecekan menyeluruh 32 titik komponen mesin, pembersihan throttle body, pemeriksaan kampas rem, aki, dan kalibrasi scanner OBD-II.",
-    price: 450000,
-    durationMinutes: 90,
-    categoryId: "cat-1",
-    categoryName: "Berkala",
-    rating: "4.9",
-    reviewCount: 128,
-    imageUrl: "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "srv-2",
-    name: "Ganti Oli Full Synthetic",
-    description: "Penggantian oli mesin full synthetic 4 liter beserta filter oli original dan pengecekan tekanan angin serta kondisi busi.",
-    price: 385000,
-    durationMinutes: 45,
-    categoryId: "cat-2",
-    categoryName: "Ganti Oli",
-    rating: "4.8",
-    reviewCount: 94,
-    imageUrl: "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "srv-3",
-    name: "Flushing & Servis AC Mobil",
-    description: "Kuras freon R134a dengan mesin otomatis, penggantian oli kompresor, pembersihan evaporator, dan uji kebocoran.",
-    price: 320000,
-    durationMinutes: 60,
-    categoryId: "cat-4",
-    categoryName: "AC Mobil",
-    rating: "4.9",
-    reviewCount: 76,
-    imageUrl: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "srv-4",
-    name: "Spooring 3D & Balancing",
-    description: "Penyelarasan sudut roda menggunakan sensor laser 3D presisi tinggi dan balancing 4 roda untuk kestabilan berkendara.",
-    price: 250000,
-    durationMinutes: 60,
-    categoryId: "cat-5",
-    categoryName: "Rem & Kaki",
-    rating: "4.8",
-    reviewCount: 112,
-    imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=600&q=80",
-  },
+const CATEGORIES = [
+  { id: "all", name: "Semua", icon: "apps-outline" as const },
+  { id: "berkala", name: "Berkala", icon: "construct-outline" as const },
+  { id: "oli", name: "Ganti Oli", icon: "water-outline" as const },
+  { id: "listrik", name: "Kelistrikan", icon: "flash-outline" as const },
+  { id: "cuci", name: "Cuci & Salon", icon: "sparkles-outline" as const },
+  { id: "rem", name: "Rem & Kaki", icon: "disc-outline" as const },
+  { id: "ac", name: "AC Mobil", icon: "snow-outline" as const },
+  { id: "tuneup", name: "Tune Up", icon: "speedometer-outline" as const },
 ];
 
 export default function HomeScreen({ navigation }: any) {
-  const [userName, setUserName] = useState("Pelanggan");
-  const [outlets, setOutlets] = useState<OutletItem[]>(FALLBACK_OUTLETS);
-  const [activeOutlet, setActiveOutlet] = useState<OutletItem>(FALLBACK_OUTLETS[0]);
-  const [services, setServices] = useState<ServiceItem[]>(FALLBACK_SERVICES);
-  const [selectedCat, setSelectedCat] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [savedIds, setSavedIds] = useState<string[]>(["srv-1"]);
+  const [userName, setUserName] = useState("Pelanggan Tallero");
+  const [outlets, setOutlets] = useState<OutletItem[]>([]);
+  const [activeOutlet, setActiveOutlet] = useState<OutletItem | null>(null);
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [selectedCat, setSelectedCat] = useState<string>("all");
+  const [searchText, setSearchText] = useState("");
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+
   const [detailService, setDetailService] = useState<ServiceItem | null>(null);
   const [outletModal, setOutletModal] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<string>("");
+  const [selectedTime, setSelectedTime] = useState("10:00");
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem("tallero_user").then((raw) => {
-      if (raw) {
-        const u = JSON.parse(raw);
-        if (u?.name) setUserName(u.name.split(" ")[0]);
+    const loadAllData = async () => {
+      try {
+        const rawUser = await AsyncStorage.getItem("tallero_user");
+        if (rawUser) {
+          const u = JSON.parse(rawUser);
+          if (u?.name) setUserName(u.name);
+        }
+
+        const [outRes, srvRes, vehRes] = await Promise.allSettled([
+          api.get("/outlets"),
+          api.get("/services"),
+          api.get("/vehicles"),
+        ]);
+
+        if (outRes.status === "fulfilled") {
+          const list = unwrapData(outRes.value);
+          if (Array.isArray(list)) {
+            setOutlets(list);
+            if (list.length > 0) setActiveOutlet(list[0]);
+          }
+        }
+
+        if (srvRes.status === "fulfilled") {
+          const list = unwrapData(srvRes.value);
+          if (Array.isArray(list)) {
+            setServices(
+              list.map((s: any, idx: number) => ({
+                ...s,
+                rating: s.rating || "4.9",
+                reviewsCount: s.reviewsCount || 120,
+                imageUrl: s.imageUrl || SERVICE_IMAGES[idx % SERVICE_IMAGES.length],
+              }))
+            );
+          }
+        }
+
+        if (vehRes.status === "fulfilled") {
+          const list = unwrapData(vehRes.value);
+          if (Array.isArray(list)) {
+            setVehicles(list);
+            if (list.length > 0) setSelectedVehicle(list[0].id);
+          }
+        }
+      } finally {
+        setLoading(false);
       }
-    });
+    };
 
-    api.get("/outlets")
-      .then((res) => {
-        const list = unwrapData(res);
-        if (Array.isArray(list) && list.length > 0) {
-          setOutlets(list);
-          setActiveOutlet(list[0]);
-        }
-      })
-      .catch(() => {});
-
-    api.get("/services")
-      .then((res) => {
-        const list = unwrapData(res);
-        if (Array.isArray(list) && list.length > 0) {
-          setServices(
-            list.map((s: any, idx: number) => ({
-              ...s,
-              categoryId: s.categoryId || "cat-1",
-              categoryName: s.category?.name || "Berkala",
-              rating: "4.9",
-              reviewCount: 80 + idx * 12,
-              imageUrl: s.imageUrl || FALLBACK_SERVICES[idx % FALLBACK_SERVICES.length].imageUrl,
-            }))
-          );
-        }
-      })
-      .catch(() => {});
+    loadAllData();
   }, []);
 
   const formatRp = (n: number) => "Rp " + Number(n || 0).toLocaleString("id-ID");
 
-  const toggleSave = (id: string) =>
+  const toggleBookmark = (id: string) =>
     setSavedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const visibleServices = services.filter((s) => {
-    const matchCat = selectedCat === "all" || s.categoryId === selectedCat;
-    const matchText =
-      !searchQuery.trim() || s.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchText;
-  });
+  const visibleServices = services.filter((s) =>
+    s.name.toLowerCase().includes(searchText.toLowerCase())
+  );
+
+  const handleQuickBook = async (service: ServiceItem) => {
+    if (!activeOutlet) {
+      Alert.alert("Cabang Belum Dipilih", "Silakan pilih cabang bengkel terlebih dahulu.");
+      return;
+    }
+    if (!selectedVehicle) {
+      Alert.alert(
+        "Kendaraan Belum Ada",
+        "Tambahkan data kendaraan terlebih dahulu di halaman Profil.",
+        [{ text: "Ke Profil", onPress: () => { setDetailService(null); navigation.navigate("Profile"); } }]
+      );
+      return;
+    }
+
+    try {
+      setBookingLoading(true);
+      await api.post("/bookings", {
+        vehicleId: selectedVehicle,
+        outletId: activeOutlet.id,
+        serviceIds: [service.id],
+        scheduledAt: new Date().toISOString(),
+      });
+
+      setDetailService(null);
+      Alert.alert(
+        "Reservasi Berhasil",
+        `${service.name} di ${activeOutlet.name} pukul ${selectedTime} WIB telah dijadwalkan.`,
+        [{ text: "Lihat Riwayat", onPress: () => navigation.navigate("History") }]
+      );
+    } catch (err: any) {
+      Alert.alert(
+        "Gagal Booking",
+        err?.response?.data?.message || "Terjadi kesalahan saat membuat reservasi."
+      );
+    } finally {
+      setBookingLoading(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
-      {/* HEADER BIRU MELENGKUNG (Persis Referensi Layar 1) */}
-      <View style={styles.blueHeader}>
-        <View style={styles.headerTopRow}>
-          <TouchableOpacity
-            style={styles.userRow}
-            onPress={() => setOutletModal(true)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.avatarCircle}>
-              <Feather name="user" size={18} color="#1E60D5" />
-            </View>
-            <View style={{ marginLeft: 10 }}>
-              <Text style={styles.greetingText}>Hi, {userName} 👋</Text>
-              <Text style={styles.locationSub}>{activeOutlet.city}</Text>
-            </View>
-          </TouchableOpacity>
-
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <TouchableOpacity style={styles.headerIconBtn} onPress={() => setOutletModal(true)}>
-              <Feather name="bell" size={18} color="#FFFFFF" />
-              <View style={styles.notifDot} />
-            </TouchableOpacity>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
+        {/* Header Biru Melengkung */}
+        <View style={styles.blueHeader}>
+          <View style={styles.headerTopRow}>
             <TouchableOpacity
-              style={[styles.headerIconBtn, { marginLeft: 6 }]}
-              onPress={() => navigation.navigate("Profile")}
+              style={styles.userInfoRow}
+              onPress={() => setOutletModal(true)}
+              activeOpacity={0.85}
             >
-              <Feather name="more-vertical" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Search Bar Putih + Tombol Filter */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchBox}>
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Cari layanan bengkel..."
-              placeholderTextColor="#94A3B8"
-              style={styles.searchInput}
-            />
-            <Feather name="search" size={16} color="#64748B" />
-          </View>
-          <TouchableOpacity
-            style={styles.filterSquareBtn}
-            onPress={() => navigation.navigate("Booking")}
-          >
-            <Feather name="sliders" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* BANNER PROMO BIRU LANGIT (Persis "20% Off Today's Special!") */}
-        <TouchableOpacity
-          style={styles.promoBanner}
-          onPress={() => navigation.navigate("Booking")}
-          activeOpacity={0.9}
-        >
-          <View style={{ flex: 1, paddingRight: 10 }}>
-            <Text style={styles.promoBig}>Diskon 20%</Text>
-            <Text style={styles.promoSubTitle}>Spesial Servis Berkala!</Text>
-            <Text style={styles.promoDesc}>
-              Booking tanpa antre di cabang {activeOutlet.name}.
-            </Text>
-          </View>
-          <Image
-            source={{ uri: MECHANIC_HERO_IMG }}
-            style={styles.promoThumb}
-            resizeMode="cover"
-          />
-        </TouchableOpacity>
-
-        {/* SECTION 1: LAYANAN UTAMA (Grid 4x2 Persis "Most Used Services") */}
-        <View style={styles.rowBetween}>
-          <Text style={styles.sectionTitle}>Layanan Utama</Text>
-          <TouchableOpacity onPress={() => navigation.navigate("Booking")}>
-            <Text style={styles.viewAllText}>Lihat Semua</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.iconGrid}>
-          {QUICK_MENU.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.iconGridItem}
-              onPress={() => setSelectedCat(item.id)}
-              activeOpacity={0.8}
-            >
-              <View
-                style={[
-                  styles.iconSquare,
-                  selectedCat === item.id && styles.iconSquareActive,
-                ]}
-              >
-                <Feather
-                  name={item.icon}
-                  size={20}
-                  color={selectedCat === item.id ? "#FFFFFF" : "#1E60D5"}
-                />
+              <View style={styles.avatarCircle}>
+                <Ionicons name="person" size={18} color="#1D4ED8" />
               </View>
-              <Text style={styles.iconLabel} numberOfLines={1}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* SECTION 2: LAYANAN POPULER + CHIPS (Persis "Most Popular Services") */}
-        <View style={[styles.rowBetween, { marginTop: 10 }]}>
-          <Text style={styles.sectionTitle}>Layanan Populer</Text>
-          <TouchableOpacity onPress={() => navigation.navigate("Booking")}>
-            <Text style={styles.viewAllText}>Lihat Semua</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginVertical: 12 }}
-        >
-          {FILTER_CHIPS.map((chip) => {
-            const active = selectedCat === chip.id;
-            return (
-              <TouchableOpacity
-                key={chip.id}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setSelectedCat(chip.id)}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                  {chip.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* LIST KARTU LAYANAN HORIZONTAL */}
-        {visibleServices.map((srv) => {
-          const isSaved = savedIds.includes(srv.id);
-          return (
-            <TouchableOpacity
-              key={srv.id}
-              style={styles.serviceCard}
-              onPress={() => setDetailService(srv)}
-              activeOpacity={0.88}
-            >
-              <Image
-                source={{ uri: srv.imageUrl }}
-                style={styles.serviceThumb}
-                resizeMode="cover"
-              />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.outletCaption}>{activeOutlet.name}</Text>
-                <Text style={styles.serviceName} numberOfLines={1}>
-                  {srv.name}
-                </Text>
-                <Text style={styles.priceBlue}>
-                  {formatRp(srv.price)}
-                  <Text style={styles.priceUnit}> /sesi</Text>
-                </Text>
-                <View style={styles.ratingRow}>
-                  <Feather name="star" size={12} color="#F59E0B" />
-                  <Text style={styles.ratingText}>
-                    {srv.rating} ({srv.reviewCount} Ulasan)
+              <View style={{ marginLeft: 10 }}>
+                <Text style={styles.greetingText}>Halo, {userName}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 2 }}>
+                  <Ionicons name="location-outline" size={12} color="#DBEAFE" />
+                  <Text style={styles.locationText}>
+                    {activeOutlet ? activeOutlet.city : "Pilih Cabang Bengkel"}
                   </Text>
                 </View>
               </View>
-
-              <TouchableOpacity
-                style={styles.bookmarkBtn}
-                onPress={() => toggleSave(srv.id)}
-              >
-                <Feather
-                  name="bookmark"
-                  size={16}
-                  color={isSaved ? "#1E60D5" : "#CBD5E1"}
-                />
-              </TouchableOpacity>
             </TouchableOpacity>
-          );
-        })}
+
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <TouchableOpacity
+                style={styles.headerIconBtn}
+                onPress={() => navigation.navigate("History")}
+              >
+                <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.headerIconBtn, { marginLeft: 6 }]}
+                onPress={() => setOutletModal(true)}
+              >
+                <Ionicons name="ellipsis-vertical" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.searchRow}>
+            <View style={styles.searchBox}>
+              <TextInput
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder="Cari layanan bengkel..."
+                placeholderTextColor="#94A3B8"
+                style={styles.searchInput}
+              />
+              <Ionicons name="search-outline" size={18} color="#64748B" />
+            </View>
+            <TouchableOpacity
+              style={styles.filterSquareBtn}
+              onPress={() => navigation.navigate("Booking")}
+            >
+              <Ionicons name="options-outline" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.bodyPadding}>
+          {/* Banner Promo Biru */}
+          <View style={styles.promoBanner}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.promoDiscount}>Diskon 20%</Text>
+              <Text style={styles.promoHeadline}>Spesial Servis Hari Ini!</Text>
+              <Text style={styles.promoSub}>
+                Potongan langsung untuk booking servis berkala lewat aplikasi.
+              </Text>
+            </View>
+            <Image
+              source={{
+                uri: "https://images.unsplash.com/photo-1530046339160-ce3e530c7d2f?auto=format&fit=crop&w=400&q=80",
+              }}
+              style={styles.promoImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Grid 4x2 Kategori Servis */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Layanan Utama</Text>
+            <TouchableOpacity onPress={() => navigation.navigate("Booking")}>
+              <Text style={styles.viewAllText}>Lihat Semua</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.categoryGrid}>
+            {CATEGORIES.map((cat) => {
+              const active = selectedCat === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={styles.categoryCell}
+                  onPress={() => setSelectedCat(active ? "all" : cat.id)}
+                  activeOpacity={0.8}
+                >
+                  <View
+                    style={[
+                      styles.categoryIconBox,
+                      active && { backgroundColor: "#1D4ED8", borderColor: "#1D4ED8" },
+                    ]}
+                  >
+                    <Ionicons
+                      name={cat.icon}
+                      size={22}
+                      color={active ? "#FFFFFF" : "#1D4ED8"}
+                    />
+                  </View>
+                  <Text style={styles.categoryLabel} numberOfLines={1}>
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Daftar Layanan Populer dari Database */}
+          <View style={[styles.sectionHeader, { marginTop: 10 }]}>
+            <Text style={styles.sectionTitle}>Layanan Populer</Text>
+            <TouchableOpacity onPress={() => navigation.navigate("Booking")}>
+              <Text style={styles.viewAllText}>Lihat Semua</Text>
+            </TouchableOpacity>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator size="large" color="#1D4ED8" style={{ marginVertical: 24 }} />
+          ) : visibleServices.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.outletCaption}>
+                Belum ada data layanan di database. Pastikan seed backend sudah dijalankan.
+              </Text>
+            </View>
+          ) : (
+            visibleServices.map((srv) => {
+              const bookmarked = savedIds.includes(srv.id);
+              return (
+                <TouchableOpacity
+                  key={srv.id}
+                  style={styles.serviceRowCard}
+                  onPress={() => setDetailService(srv)}
+                  activeOpacity={0.88}
+                >
+                  <Image
+                    source={{ uri: srv.imageUrl }}
+                    style={styles.serviceThumb}
+                    resizeMode="cover"
+                  />
+
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.outletCaption}>
+                      {activeOutlet?.name || "Tallero Auto Center"}
+                    </Text>
+                    <Text style={styles.serviceTitle} numberOfLines={1}>
+                      {srv.name}
+                    </Text>
+                    <Text style={styles.servicePrice}>{formatRp(srv.price)}</Text>
+                    <View style={styles.ratingRow}>
+                      <Ionicons name="star" size={13} color="#F59E0B" />
+                      <Text style={styles.ratingText}>
+                        {srv.rating} ({srv.reviewsCount} Ulasan)
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => toggleBookmark(srv.id)}
+                    style={styles.bookmarkBtn}
+                  >
+                    <Ionicons
+                      name={bookmarked ? "bookmark" : "bookmark-outline"}
+                      size={18}
+                      color={bookmarked ? "#1D4ED8" : "#94A3B8"}
+                    />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
       </ScrollView>
 
-      {/* MODAL DETAIL LAYANAN (Persis Layar 3 Referensi) */}
-      <Modal visible={!!detailService} animationType="slide">
+      {/* Modal Detail Layanan */}
+      <Modal
+        visible={!!detailService}
+        animationType="slide"
+        onRequestClose={() => setDetailService(null)}
+      >
         {detailService && (
-          <View style={styles.detailContainer}>
-            {/* Hero Image Atas */}
+          <View style={styles.detailScreen}>
             <View style={styles.detailHero}>
               <Image
                 source={{ uri: detailService.imageUrl }}
-                style={styles.detailHeroImg}
+                style={styles.detailHeroImage}
                 resizeMode="cover"
               />
               <TouchableOpacity
-                style={styles.backCircle}
+                style={styles.backCircleBtn}
                 onPress={() => setDetailService(null)}
               >
-                <Feather name="chevron-left" size={20} color="#1E293B" />
+                <Ionicons name="chevron-back" size={20} color="#0F172A" />
               </TouchableOpacity>
             </View>
 
-            {/* Lembar Putih Melengkung */}
-            <View style={styles.detailSheet}>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.detailTitle}>{detailService.name}</Text>
-                  <TouchableOpacity onPress={() => toggleSave(detailService.id)}>
-                    <Feather
-                      name="bookmark"
-                      size={18}
-                      color={savedIds.includes(detailService.id) ? "#1E60D5" : "#94A3B8"}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={[styles.ratingRow, { marginTop: 6 }]}>
-                  <Text style={styles.detailOutletBlue}>{activeOutlet.name}</Text>
-                  <Feather
-                    name="star"
-                    size={12}
-                    color="#F59E0B"
-                    style={{ marginLeft: 10 }}
+            <ScrollView
+              style={styles.detailSheet}
+              contentContainerStyle={{ paddingBottom: 100 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.detailTitleRow}>
+                <Text style={styles.detailTitle}>{detailService.name}</Text>
+                <TouchableOpacity onPress={() => toggleBookmark(detailService.id)}>
+                  <Ionicons
+                    name={savedIds.includes(detailService.id) ? "bookmark" : "bookmark-outline"}
+                    size={22}
+                    color="#1D4ED8"
                   />
-                  <Text style={styles.ratingText}>
-                    {detailService.rating} ({detailService.reviewCount} Ulasan)
-                  </Text>
-                </View>
-
-                <View style={[styles.ratingRow, { marginTop: 6 }]}>
-                  <Feather name="map-pin" size={13} color="#1E60D5" />
-                  <Text style={styles.detailAddress}>{activeOutlet.address}</Text>
-                </View>
-
-                <Text style={styles.detailPrice}>
-                  {formatRp(detailService.price)}
-                  <Text style={styles.priceUnit}> /sesi ({detailService.durationMinutes} mnt)</Text>
-                </Text>
-
-                <View style={styles.divider} />
-
-                <Text style={styles.aboutHeading}>Tentang Layanan</Text>
-                <Text style={styles.aboutDesc}>{detailService.description}</Text>
-              </ScrollView>
-
-              {/* 2 Tombol Bawah (Persis "Message" & "Book Now") */}
-              <View style={styles.bottomActionRow}>
-                <TouchableOpacity
-                  style={styles.softBlueBtn}
-                  onPress={() => Linking.openURL(`tel:${activeOutlet.phone}`)}
-                >
-                  <Feather name="phone" size={15} color="#1E60D5" />
-                  <Text style={styles.softBlueBtnText}>Hubungi</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.solidBlueBtn}
-                  onPress={() => {
-                    const id = detailService.id;
-                    setDetailService(null);
-                    navigation.navigate("Booking", {
-                      serviceId: id,
-                      outletId: activeOutlet.id,
-                    });
-                  }}
-                >
-                  <Text style={styles.solidBlueBtnText}>Booking Sekarang</Text>
                 </TouchableOpacity>
               </View>
+
+              <View style={styles.providerRow}>
+                <Text style={styles.providerName}>{activeOutlet?.name || "Tallero Center"}</Text>
+                <Ionicons name="star" size={14} color="#F59E0B" style={{ marginLeft: 10 }} />
+                <Text style={styles.ratingText}>
+                  {detailService.rating} ({detailService.reviewsCount} Ulasan)
+                </Text>
+              </View>
+
+              {activeOutlet && (
+                <View style={styles.addressRow}>
+                  <Ionicons name="location-outline" size={15} color="#1D4ED8" />
+                  <Text style={styles.addressText}>{activeOutlet.address}</Text>
+                </View>
+              )}
+
+              <View style={styles.priceRow}>
+                <Text style={styles.detailPrice}>{formatRp(detailService.price)}</Text>
+                <Text style={styles.priceUnit}> ({detailService.durationMinutes || 60} Menit)</Text>
+              </View>
+
+              <View style={styles.divider} />
+
+              <Text style={styles.aboutHeading}>Tentang Layanan</Text>
+              <Text style={styles.aboutBody}>{detailService.description}</Text>
+
+              <Text style={[styles.aboutHeading, { marginTop: 16 }]}>Kendaraan & Jam</Text>
+              {vehicles.length === 0 ? (
+                <TouchableOpacity
+                  style={styles.filterPill}
+                  onPress={() => {
+                    setDetailService(null);
+                    navigation.navigate("Profile");
+                  }}
+                >
+                  <Text style={styles.filterPillText}>+ Tambah Kendaraan di Profil</Text>
+                </TouchableOpacity>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                  {vehicles.map((v) => {
+                    const active = v.id === selectedVehicle;
+                    return (
+                      <TouchableOpacity
+                        key={v.id}
+                        style={[styles.filterPill, active && styles.filterPillActive]}
+                        onPress={() => setSelectedVehicle(v.id)}
+                      >
+                        <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
+                          {v.brand} {v.model} ({v.licensePlate})
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                {["09:00", "10:00", "13:30", "15:30"].map((jam) => {
+                  const active = jam === selectedTime;
+                  return (
+                    <TouchableOpacity
+                      key={jam}
+                      style={[styles.filterPill, active && styles.filterPillActive]}
+                      onPress={() => setSelectedTime(jam)}
+                    >
+                      <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
+                        {jam} WIB
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <View style={styles.detailBottomBar}>
+              <TouchableOpacity
+                style={styles.secondaryActionBtn}
+                onPress={() => {
+                  setDetailService(null);
+                  setOutletModal(true);
+                }}
+              >
+                <Ionicons name="location-outline" size={16} color="#1D4ED8" />
+                <Text style={styles.secondaryActionText}>Ganti Cabang</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.primaryActionBtn}
+                disabled={bookingLoading}
+                onPress={() => handleQuickBook(detailService)}
+              >
+                {bookingLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.primaryActionText}>Booking Sekarang</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         )}
       </Modal>
 
-      {/* MODAL PILIH OUTLET */}
-      <Modal visible={outletModal} transparent animationType="slide">
+      {/* Modal Pilih Cabang */}
+      <Modal
+        visible={outletModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOutletModal(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.bottomSheet}>
-            <View style={[styles.rowBetween, { marginBottom: 14 }]}>
+          <View style={styles.outletSheet}>
+            <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Pilih Cabang Bengkel</Text>
               <TouchableOpacity onPress={() => setOutletModal(false)}>
-                <Feather name="x" size={19} color="#64748B" />
+                <Ionicons name="close" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
-            {outlets.map((o) => {
-              const active = o.id === activeOutlet.id;
-              return (
-                <TouchableOpacity
-                  key={o.id}
-                  style={[styles.outletCard, active && styles.outletCardActive]}
-                  onPress={() => {
-                    setActiveOutlet(o);
-                    setOutletModal(false);
-                  }}
-                >
-                  <Text style={styles.serviceName}>{o.name}</Text>
-                  <Text style={styles.outletCaption}>
-                    {o.address} • {o.city}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {outlets.map((o) => (
+              <TouchableOpacity
+                key={o.id}
+                style={[
+                  styles.outletOption,
+                  o.id === activeOutlet?.id && { borderColor: "#1D4ED8", backgroundColor: "#EFF6FF" },
+                ]}
+                onPress={() => {
+                  setActiveOutlet(o);
+                  setOutletModal(false);
+                }}
+              >
+                <Text style={styles.serviceTitle}>{o.name}</Text>
+                <Text style={styles.outletCaption}>{o.address}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </Modal>
@@ -490,221 +541,72 @@ export default function HomeScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F8FAFC" },
   blueHeader: {
-    backgroundColor: "#1E60D5",
-    paddingTop: Platform.OS === "ios" ? 54 : 32,
+    backgroundColor: "#1D4ED8",
+    paddingTop: Platform.OS === "ios" ? 54 : 36,
     paddingBottom: 22,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
-  headerTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  userRow: { flexDirection: "row", alignItems: "center" },
-  avatarCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  greetingText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
-  locationSub: { color: "#DBEAFE", fontSize: 11, marginTop: 2 },
-  headerIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notifDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "#38BDF8",
-    position: "absolute",
-    top: 7,
-    right: 8,
-  },
+  headerTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+  userInfoRow: { flexDirection: "row", alignItems: "center" },
+  avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  greetingText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+  locationText: { color: "#DBEAFE", fontSize: 11, marginLeft: 4 },
+  headerIconBtn: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   searchRow: { flexDirection: "row", alignItems: "center" },
-  searchBox: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 44,
-  },
-  searchInput: { flex: 1, fontSize: 13, color: "#1E293B", marginRight: 8 },
-  filterSquareBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#3B82F6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 10,
-  },
-  scroll: { padding: 20, paddingBottom: 100 },
-  promoBanner: {
-    backgroundColor: "#38A3D8",
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 22,
-  },
-  promoBig: { color: "#FFFFFF", fontSize: 22, fontWeight: "700" },
-  promoSubTitle: { color: "#FFFFFF", fontSize: 13, fontWeight: "600", marginTop: 2 },
-  promoDesc: { color: "#E0F2FE", fontSize: 11, marginTop: 4, lineHeight: 16 },
-  promoThumb: {
-    width: 96,
-    height: 84,
-    borderRadius: 14,
-    backgroundColor: "#E0F2FE",
-  },
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sectionTitle: { fontSize: 15, fontWeight: "600", color: "#1E293B" },
-  viewAllText: { fontSize: 12, fontWeight: "500", color: "#1E60D5" },
-  iconGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginTop: 14,
-  },
-  iconGridItem: {
-    width: "23%",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  iconSquare: {
-    width: 54,
-    height: 54,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginBottom: 6,
-  },
-  iconSquareActive: {
-    backgroundColor: "#1E60D5",
-    borderColor: "#1E60D5",
-  },
-  iconLabel: { fontSize: 11, fontWeight: "500", color: "#475569", textAlign: "center" },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginRight: 8,
-  },
-  chipActive: { backgroundColor: "#1E60D5", borderColor: "#1E60D5" },
-  chipText: { fontSize: 12, fontWeight: "500", color: "#64748B" },
-  chipTextActive: { color: "#FFFFFF" },
-  serviceCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-  },
-  serviceThumb: {
-    width: 76,
-    height: 76,
-    borderRadius: 12,
-    backgroundColor: "#EBF3FE",
-  },
+  searchBox: { flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 12, paddingHorizontal: 12, height: 44 },
+  searchInput: { flex: 1, fontSize: 13, color: "#0F172A" },
+  filterSquareBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center", marginLeft: 10 },
+  bodyPadding: { paddingHorizontal: 20, paddingTop: 18 },
+  promoBanner: { backgroundColor: "#38BDF8", borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", marginBottom: 20 },
+  promoDiscount: { color: "#FFFFFF", fontSize: 22, fontWeight: "800" },
+  promoHeadline: { color: "#FFFFFF", fontSize: 14, fontWeight: "700", marginTop: 2 },
+  promoSub: { color: "#F0F9FF", fontSize: 11, marginTop: 4, lineHeight: 15 },
+  promoImage: { width: 96, height: 86, borderRadius: 14, backgroundColor: "#E0F2FE" },
+  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
+  viewAllText: { fontSize: 12, fontWeight: "600", color: "#1D4ED8" },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  categoryCell: { width: "23%", alignItems: "center", marginBottom: 14 },
+  categoryIconBox: { width: 56, height: 56, borderRadius: 16, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0", marginBottom: 6 },
+  categoryLabel: { fontSize: 11, fontWeight: "500", color: "#475569", textAlign: "center" },
+  filterPill: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E2E8F0", marginRight: 8, marginBottom: 8 },
+  filterPillActive: { backgroundColor: "#1D4ED8", borderColor: "#1D4ED8" },
+  filterPillText: { fontSize: 12, fontWeight: "500", color: "#64748B" },
+  filterPillTextActive: { color: "#FFFFFF", fontWeight: "600" },
+  emptyCard: { backgroundColor: "#FFFFFF", padding: 20, borderRadius: 16, alignItems: "center" },
+  serviceRowCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 16, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: "#F1F5F9" },
+  serviceThumb: { width: 78, height: 78, borderRadius: 14, backgroundColor: "#EFF6FF" },
   outletCaption: { fontSize: 11, color: "#94A3B8" },
-  serviceName: { fontSize: 14, fontWeight: "600", color: "#1E293B", marginTop: 2 },
-  priceBlue: { fontSize: 14, fontWeight: "600", color: "#1E60D5", marginTop: 4 },
-  priceUnit: { fontSize: 11, fontWeight: "400", color: "#94A3B8" },
+  serviceTitle: { fontSize: 14, fontWeight: "700", color: "#0F172A", marginTop: 2 },
+  servicePrice: { fontSize: 13, fontWeight: "700", color: "#1D4ED8", marginTop: 3 },
   ratingRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   ratingText: { fontSize: 11, color: "#64748B", marginLeft: 4 },
-  bookmarkBtn: { padding: 6, alignSelf: "flex-start" },
-  detailContainer: { flex: 1, backgroundColor: "#FFFFFF" },
-  detailHero: { height: 240, backgroundColor: "#E0F2FE" },
-  detailHeroImg: { width: "100%", height: "100%" },
-  backCircle: {
-    position: "absolute",
-    top: Platform.OS === "ios" ? 50 : 22,
-    left: 20,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  detailSheet: {
-    flex: 1,
-    marginTop: -24,
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    padding: 22,
-  },
-  detailTitle: { fontSize: 19, fontWeight: "600", color: "#1E293B", flex: 1 },
-  detailOutletBlue: { fontSize: 13, fontWeight: "600", color: "#1E60D5" },
-  detailAddress: { fontSize: 12, color: "#64748B", marginLeft: 5 },
-  detailPrice: { fontSize: 20, fontWeight: "700", color: "#1E60D5", marginTop: 12 },
-  divider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 16 },
-  aboutHeading: { fontSize: 14, fontWeight: "600", color: "#1E293B", marginBottom: 6 },
-  aboutDesc: { fontSize: 13, color: "#64748B", lineHeight: 20 },
-  bottomActionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 12,
-    gap: 12,
-  },
-  softBlueBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EBF3FE",
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 6,
-  },
-  softBlueBtnText: { color: "#1E60D5", fontSize: 14, fontWeight: "600" },
-  solidBlueBtn: {
-    flex: 1.4,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#1E60D5",
-    paddingVertical: 14,
-    borderRadius: 14,
-  },
-  solidBlueBtnText: { color: "#FFFFFF", fontSize: 14, fontWeight: "600" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15,23,42,0.4)",
-    justifyContent: "flex-end",
-  },
-  bottomSheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    padding: 22,
-  },
-  outletCard: {
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginBottom: 10,
-  },
-  outletCardActive: { borderColor: "#1E60D5", backgroundColor: "#F8FAFC" },
+  bookmarkBtn: { alignSelf: "flex-start", padding: 4 },
+  detailScreen: { flex: 1, backgroundColor: "#FFFFFF" },
+  detailHero: { height: 250, backgroundColor: "#DBEAFE" },
+  detailHeroImage: { width: "100%", height: "100%" },
+  backCircleBtn: { position: "absolute", top: Platform.OS === "ios" ? 50 : 24, left: 20, width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.85)", alignItems: "center", justifyContent: "center" },
+  detailSheet: { flex: 1, backgroundColor: "#FFFFFF", borderTopLeftRadius: 26, borderTopRightRadius: 26, marginTop: -24, paddingHorizontal: 20, paddingTop: 22 },
+  detailTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  detailTitle: { fontSize: 19, fontWeight: "700", color: "#0F172A", flex: 1, paddingRight: 10 },
+  providerRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  providerName: { fontSize: 13, fontWeight: "600", color: "#1D4ED8" },
+  addressRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  addressText: { fontSize: 12, color: "#64748B", marginLeft: 5 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", marginTop: 10 },
+  detailPrice: { fontSize: 18, fontWeight: "800", color: "#1D4ED8" },
+  priceUnit: { fontSize: 12, color: "#94A3B8" },
+  divider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 14 },
+  aboutHeading: { fontSize: 14, fontWeight: "700", color: "#0F172A", marginBottom: 6 },
+  aboutBody: { fontSize: 13, color: "#64748B", lineHeight: 20 },
+  detailBottomBar: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", paddingHorizontal: 20, paddingVertical: 14, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#F1F5F9", gap: 12 },
+  secondaryActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#EFF6FF", paddingVertical: 13, borderRadius: 12 },
+  secondaryActionText: { color: "#1D4ED8", fontSize: 13, fontWeight: "600", marginLeft: 6 },
+  primaryActionBtn: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#1D4ED8", paddingVertical: 13, borderRadius: 12 },
+  primaryActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.4)", justifyContent: "flex-end" },
+  outletSheet: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  outletOption: { padding: 14, borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", marginBottom: 10 },
 });

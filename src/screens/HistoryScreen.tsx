@@ -1,65 +1,56 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
   StyleSheet,
   Platform,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import api, { unwrapData } from "../services/api";
 
-const FALLBACK_BOOKINGS = [
-  {
-    id: "bk-1",
-    code: "TLR-261127-01",
-    serviceName: "Servis Berkala 10K",
-    outletName: "Tallero Auto Center",
-    vehicleLabel: "Toyota Avanza • B 1428 TLR",
-    dateLabel: "Hari Ini • 10:00 WIB",
-    totalPrice: 450000,
-    status: "IN_PROGRESS",
-  },
-  {
-    id: "bk-2",
-    code: "TLR-261114-08",
-    serviceName: "Ganti Oli Full Synthetic",
-    outletName: "Tallero Auto Center",
-    vehicleLabel: "Toyota Avanza • B 1428 TLR",
-    dateLabel: "14 Nov 2026 • 13:30 WIB",
-    totalPrice: 385000,
-    status: "COMPLETED",
-  },
-];
-
 export default function HistoryScreen({ navigation }: any) {
-  const [bookings, setBookings] = useState(FALLBACK_BOOKINGS);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"ALL" | "ACTIVE" | "DONE">("ALL");
 
-  useEffect(() => {
-    api.get("/bookings")
-      .then((res) => {
-        const list = unwrapData(res);
-        if (Array.isArray(list) && list.length > 0) {
-          setBookings(
-            list.map((b: any) => ({
-              id: b.id,
-              code: b.code || `TLR-${String(b.id).slice(0, 6).toUpperCase()}`,
-              serviceName: b.services?.[0]?.service?.name || "Servis Berkala Tallero",
-              outletName: b.outlet?.name || "Tallero Auto Center",
-              vehicleLabel: b.vehicle
-                ? `${b.vehicle.brand} • ${b.vehicle.licensePlate}`
-                : "Toyota Avanza • B 1428 TLR",
-              dateLabel: new Date(b.scheduledAt).toLocaleDateString("id-ID"),
-              totalPrice: Number(b.totalPrice || 450000),
-              status: b.status || "CONFIRMED",
-            }))
-          );
-        }
-      })
-      .catch(() => {});
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      api.get("/bookings")
+        .then((res) => {
+          const list = unwrapData(res);
+          if (Array.isArray(list)) {
+            setBookings(
+              list.map((b: any) => ({
+                id: b.id,
+                code: b.code || `TLR-${String(b.id).slice(0, 6).toUpperCase()}`,
+                serviceName:
+                  b.services?.[0]?.service?.name ||
+                  b.service?.name ||
+                  "Servis Kendaraan",
+                outletName: b.outlet?.name || "Tallero Auto Center",
+                vehicleLabel: b.vehicle
+                  ? `${b.vehicle.brand} • ${b.vehicle.licensePlate}`
+                  : "Kendaraan Terdaftar",
+                dateLabel: new Date(b.scheduledAt).toLocaleDateString("id-ID", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                }),
+                totalPrice: Number(b.totalPrice || b.services?.[0]?.price || 0),
+                status: b.status || "CONFIRMED",
+              }))
+            );
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }, [])
+  );
 
   const formatRp = (n: number) => "Rp " + Number(n || 0).toLocaleString("id-ID");
 
@@ -99,36 +90,44 @@ export default function HistoryScreen({ navigation }: any) {
           })}
         </View>
 
-        {list.map((item) => {
-          const done = item.status === "COMPLETED";
-          return (
-            <View key={item.id} style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.codeText}>{item.code}</Text>
-                <View
-                  style={[
-                    styles.statusPill,
-                    { backgroundColor: done ? "#EFF6FF" : "#DBEAFE" },
-                  ]}
-                >
-                  <Text style={styles.statusText}>
-                    {done ? "Selesai" : "Dikerjakan"}
-                  </Text>
+        {loading ? (
+          <ActivityIndicator size="large" color="#1D4ED8" style={{ marginVertical: 28 }} />
+        ) : list.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.subText}>Belum ada riwayat booking pada kategori ini.</Text>
+          </View>
+        ) : (
+          list.map((item) => {
+            const done = item.status === "COMPLETED";
+            return (
+              <View key={item.id} style={styles.card}>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.codeText}>{item.code}</Text>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      { backgroundColor: done ? "#EFF6FF" : "#DBEAFE" },
+                    ]}
+                  >
+                    <Text style={styles.statusText}>
+                      {done ? "Selesai" : item.status}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.serviceTitle}>{item.serviceName}</Text>
+                <Text style={styles.subText}>
+                  {item.vehicleLabel} • {item.outletName}
+                </Text>
+
+                <View style={styles.footerRow}>
+                  <Text style={styles.subText}>{item.dateLabel}</Text>
+                  <Text style={styles.priceText}>{formatRp(item.totalPrice)}</Text>
                 </View>
               </View>
-
-              <Text style={styles.serviceTitle}>{item.serviceName}</Text>
-              <Text style={styles.subText}>
-                {item.vehicleLabel} • {item.outletName}
-              </Text>
-
-              <View style={styles.footerRow}>
-                <Text style={styles.subText}>{item.dateLabel}</Text>
-                <Text style={styles.priceText}>{formatRp(item.totalPrice)}</Text>
-              </View>
-            </View>
-          );
-        })}
+            );
+          })
+        )}
       </ScrollView>
     </View>
   );
@@ -161,6 +160,7 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: "#1D4ED8", borderColor: "#1D4ED8" },
   pillText: { fontSize: 12, fontWeight: "500", color: "#64748B" },
   pillTextActive: { color: "#FFFFFF", fontWeight: "600" },
+  emptyCard: { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 20, alignItems: "center" },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,

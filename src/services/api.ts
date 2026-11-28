@@ -8,13 +8,15 @@ const LOCAL_IP = "192.168.1.5";
 export const SERVER_URL =
   Platform.OS === "web" ? "http://localhost:5000" : `http://${LOCAL_IP}:5000`;
 
-export const API_BASE_URL = `${SERVER_URL}/api`;
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || `${SERVER_URL}/api/v1`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 12000,
   headers: {
     "Content-Type": "application/json",
+    "X-Client": "mobile",
   },
 });
 
